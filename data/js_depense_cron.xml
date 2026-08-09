@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <!--
+            Analyse différée des tickets reçus par courriel ou déposés en
+            arrière-plan. L'analyse n'est délibérément pas exécutée pendant
+            la réception du courriel : une inférence de plusieurs dizaines
+            de secondes bloquerait le traitement des messages suivants.
+        -->
+        <record id="cron_analyze_pending_tickets" model="ir.cron">
+            <field name="name">Dépenses IA : analyser les tickets reçus</field>
+            <field name="model_id" ref="model_js_depense_ticket"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_analyze_pending_tickets()</field>
+            <field name="interval_number">5</field>
+            <field name="interval_type">minutes</field>
+            <field name="active" eval="True"/>
+        </record>
+
+    </data>
+</odoo>

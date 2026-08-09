@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <!--
+            Adresse de réception des tickets. Le nom est volontairement laissé
+            vide à l'installation : un alias sans nom est inactif, ce qui
+            évite d'ouvrir une adresse de création d'enregistrements sans
+            décision explicite. Il se configure dans
+            Comptabilité > Configuration > Paramètres > Dépenses IA.
+
+            « alias_contact = partners » restreint la création aux contacts
+            connus de la base. Le passer à « everyone » permettrait à
+            n'importe quel expéditeur de créer des tickets, et exposerait
+            l'adresse au courrier indésirable.
+        -->
+        <record id="mail_alias_depense_ticket" model="mail.alias">
+            <field name="alias_name" eval="False"/>
+            <field name="alias_model_id" ref="model_js_depense_ticket"/>
+            <field name="alias_contact">partners</field>
+            <field name="alias_defaults">{'origin': 'email', 'needs_ai_analysis': True}</field>
+        </record>
+
+    </data>
+</odoo>

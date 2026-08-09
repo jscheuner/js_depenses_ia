@@ -1,0 +1,42 @@
+// Dépenses IA — ajustements d'affichage
+//
+// L'objectif est qu'un écart de montant saute aux yeux : c'est le seul
+// signal qui empêche une erreur de partir en comptabilité.
+
+.o_form_view .o_field_widget[name="amount_difference"] {
+    font-weight: 600;
+}
+
+// Bandeau de contrôle des montants
+.o_form_view .alert {
+    .o_field_widget {
+        font-weight: 500;
+    }
+}
+
+// Origine de l'affectation comptable, sur les lignes
+.o_list_view .o_field_widget[name="account_source"] {
+    .o_badge,
+    .badge {
+        font-size: 0.75rem;
+    }
+}
+
+// Confort de saisie sur téléphone : cibles tactiles plus généreuses
+@media (max-width: 767px) {
+    .o_form_view .o_field_many2many_binary {
+        .o_attachment {
+            min-height: 48px;
+        }
+
+        .o_select_file_button,
+        .o_attach {
+            min-height: 44px;
+            padding: 0.5rem 1rem;
+        }
+    }
+
+    .o_form_view .o_statusbar_buttons > button {
+        min-height: 44px;
+    }
+}

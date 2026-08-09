@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="js_depense_ticket_upload_view_form" model="ir.ui.view">
+        <field name="name">js.depense.ticket.upload.form</field>
+        <field name="model">js.depense.ticket.upload</field>
+        <field name="arch" type="xml">
+            <form string="Déposer des tickets">
+                <div class="alert alert-info" role="alert">
+                    <i class="fa fa-camera me-1"/>
+                    Déposez une photo par ticket. Chaque photo crée un ticket
+                    qui sera analysé automatiquement, puis soumis à
+                    vérification avant toute comptabilisation.
+                </div>
+
+                <group>
+                    <field name="attachment_ids" widget="many2many_binary"
+                           nolabel="1" colspan="2"/>
+                </group>
+
+                <group string="Traitement">
+                    <field name="analyze_now"/>
+                    <field name="company_id"
+                           groups="base.group_multi_company"/>
+                </group>
+
+                <div class="alert alert-warning py-1" role="alert"
+                     invisible="not analyze_now">
+                    <i class="fa fa-clock-o me-1"/>
+                    L'analyse immédiate peut prendre une trentaine de secondes
+                    par photo. Au-delà de quelques tickets, décochez
+                    « Analyser immédiatement » : le traitement se fera en
+                    arrière-plan.
+                </div>
+
+                <footer>
+                    <button name="action_create_tickets" type="object"
+                            string="Créer les tickets" class="btn-primary"/>
+                    <button string="Annuler" class="btn-secondary"
+                            special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="js_depense_ticket_upload_action" model="ir.actions.act_window">
+        <field name="name">Déposer des tickets</field>
+        <field name="res_model">js.depense.ticket.upload</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+</odoo>

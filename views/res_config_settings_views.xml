@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="res_config_settings_view_form_js_depenses" model="ir.ui.view">
+        <field name="name">res.config.settings.form.js.depenses</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="account.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//block[@name='default_taxes_setting_container']" position="after">
+                <block title="Dépenses IA" name="js_depenses_block">
+
+                    <setting id="js_depense_posting"
+                             string="Comptabilisation"
+                             help="Journal et compte de contrepartie utilisés lors de la comptabilisation des tickets.">
+                        <div class="content-group mt-2">
+                            <div class="row">
+                                <label for="js_depense_journal_id"
+                                       class="col-lg-4 o_light_label"/>
+                                <field name="js_depense_journal_id"/>
+                            </div>
+                            <div class="row">
+                                <label for="js_depense_counterpart_account_id"
+                                       class="col-lg-4 o_light_label"/>
+                                <field name="js_depense_counterpart_account_id"/>
+                            </div>
+                            <div class="row">
+                                <label for="js_depense_rounding_account_id"
+                                       class="col-lg-4 o_light_label"/>
+                                <field name="js_depense_rounding_account_id"/>
+                            </div>
+                        </div>
+                    </setting>
+
+                    <setting id="js_depense_control"
+                             string="Contrôle des montants"
+                             help="Écart maximal admis entre le total des lignes et le total imprimé. Zéro impose une correspondance exacte au centime : c'est le réglage recommandé.">
+                        <div class="content-group mt-2">
+                            <div class="row">
+                                <label for="js_depense_tolerance"
+                                       class="col-lg-4 o_light_label"/>
+                                <field name="js_depense_tolerance"/>
+                            </div>
+                        </div>
+                    </setting>
+
+                    <setting id="js_depense_ai"
+                             string="Analyse automatique"
+                             help="Moteur d'analyse et nombre de relances lorsque les montants extraits ne concordent pas.">
+                        <div class="content-group mt-2">
+                            <div class="row">
+                                <label for="js_depense_ai_provider_id"
+                                       class="col-lg-4 o_light_label"/>
+                                <field name="js_depense_ai_provider_id"/>
+                            </div>
+                            <div class="row">
+                                <label for="js_depense_ai_max_iterations"
+                                       class="col-lg-4 o_light_label"/>
+                                <field name="js_depense_ai_max_iterations"/>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <field name="js_depense_use_ocr"/>
+                            <label for="js_depense_use_ocr"/>
+                        </div>
+                    </setting>
+
+                    <setting id="js_depense_learning"
+                             string="Apprentissage"
+                             help="Réutilise automatiquement les affectations issues de vos corrections précédentes.">
+                        <field name="js_depense_auto_apply_rules"/>
+                        <label for="js_depense_auto_apply_rules"/>
+                    </setting>
+
+                    <setting id="js_depense_alias"
+                             string="Réception des tickets par courriel"
+                             help="Photographiez un ticket et envoyez-le à cette adresse : le ticket est créé, analysé, puis soumis à vérification. Laisser l'adresse vide désactive la réception.">
+                        <div class="content-group mt-2">
+                            <div class="row">
+                                <label for="js_depense_alias_name"
+                                       class="col-lg-4 o_light_label"/>
+                                <field name="js_depense_alias_name"
+                                       placeholder="depenses"/>
+                            </div>
+                            <div class="row">
+                                <label for="js_depense_alias_domain_id"
+                                       class="col-lg-4 o_light_label"/>
+                                <field name="js_depense_alias_domain_id"/>
+                            </div>
+                            <div class="row">
+                                <label for="js_depense_alias_contact"
+                                       class="col-lg-4 o_light_label"/>
+                                <field name="js_depense_alias_contact"/>
+                            </div>
+                            <div class="mt-2 text-success"
+                                 invisible="not js_depense_alias_full">
+                                <i class="fa fa-envelope me-1"/>
+                                <field name="js_depense_alias_full" readonly="1"
+                                       nolabel="1" class="oe_inline"/>
+                            </div>
+                            <div class="mt-2 text-muted"
+                                 invisible="js_depense_alias_full">
+                                <i class="fa fa-info-circle me-1"/>
+                                Renseignez un nom et un domaine pour activer
+                                la réception. Un domaine de messagerie doit
+                                exister au préalable.
+                            </div>
+                        </div>
+                    </setting>
+
+                </block>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

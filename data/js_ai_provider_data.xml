@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <!--
+            Moteurs préconfigurés. Les URL et modèles restent modifiables ;
+            aucune clé d'API n'est stockée ici, seul le nom du paramètre
+            système qui la contient est référencé.
+        -->
+
+        <record id="ai_provider_ollama_local" model="js.ai.provider">
+            <field name="name">Ollama local</field>
+            <field name="provider_type">ollama</field>
+            <field name="base_url">http://localhost:11434</field>
+            <field name="model_vision">llava</field>
+            <field name="model_text">qwen3:14b</field>
+            <field name="temperature">0.0</field>
+            <field name="timeout">300</field>
+            <field name="max_retries">2</field>
+            <field name="supports_json_schema" eval="True"/>
+            <field name="is_default" eval="True"/>
+            <field name="sequence">10</field>
+        </record>
+
+        <record id="ai_provider_ollama_cloud" model="js.ai.provider">
+            <field name="name">Ollama (modèles cloud)</field>
+            <field name="provider_type">ollama</field>
+            <field name="base_url">http://localhost:11434</field>
+            <field name="model_vision">glm-5.2:cloud</field>
+            <field name="model_text">glm-5.2:cloud</field>
+            <field name="temperature">0.0</field>
+            <field name="timeout">300</field>
+            <field name="sequence">20</field>
+            <field name="active" eval="False"/>
+        </record>
+
+        <record id="ai_provider_openai" model="js.ai.provider">
+            <field name="name">OpenAI</field>
+            <field name="provider_type">openai</field>
+            <field name="base_url">https://api.openai.com/v1</field>
+            <field name="api_key_param">js_depenses_ia.openai_api_key</field>
+            <field name="model_vision">gpt-4o</field>
+            <field name="model_text">gpt-4o-mini</field>
+            <field name="temperature">0.0</field>
+            <field name="timeout">180</field>
+            <field name="sequence">30</field>
+            <field name="active" eval="False"/>
+        </record>
+
+        <record id="ai_provider_anthropic" model="js.ai.provider">
+            <field name="name">Anthropic (Claude)</field>
+            <field name="provider_type">anthropic</field>
+            <field name="base_url">https://api.anthropic.com/v1</field>
+            <field name="api_key_param">js_depenses_ia.anthropic_api_key</field>
+            <field name="model_vision">claude-sonnet-5</field>
+            <field name="model_text">claude-sonnet-5</field>
+            <field name="temperature">0.0</field>
+            <field name="timeout">180</field>
+            <field name="supports_json_schema" eval="True"/>
+            <field name="sequence">40</field>
+            <field name="active" eval="False"/>
+        </record>
+
+        <record id="ai_provider_mistral" model="js.ai.provider">
+            <field name="name">Mistral AI</field>
+            <field name="provider_type">mistral</field>
+            <field name="base_url">https://api.mistral.ai/v1</field>
+            <field name="api_key_param">js_depenses_ia.mistral_api_key</field>
+            <field name="model_vision">pixtral-large-latest</field>
+            <field name="model_text">mistral-large-latest</field>
+            <field name="temperature">0.0</field>
+            <field name="timeout">180</field>
+            <field name="sequence">50</field>
+            <field name="active" eval="False"/>
+        </record>
+
+    </data>
+</odoo>

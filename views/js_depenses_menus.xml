@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <menuitem id="menu_js_depenses_root"
+              name="Dépenses IA"
+              web_icon="js_depenses_ia,static/description/icon.png"
+              sequence="55"
+              groups="js_depenses_ia.group_js_depense_user"/>
+
+    <!-- Saisie -->
+    <menuitem id="menu_js_depenses_tickets"
+              name="Tickets"
+              parent="menu_js_depenses_root"
+              sequence="10"/>
+
+    <menuitem id="menu_js_depense_ticket_all"
+              name="Tous les tickets"
+              parent="menu_js_depenses_tickets"
+              action="js_depense_ticket_action"
+              sequence="5"/>
+
+    <menuitem id="menu_js_depense_ticket_upload"
+              name="Déposer des tickets"
+              parent="menu_js_depenses_tickets"
+              action="js_depense_ticket_upload_action"
+              sequence="10"/>
+
+    <menuitem id="menu_js_depense_ticket_to_validate"
+              name="À vérifier"
+              parent="menu_js_depenses_tickets"
+              action="js_depense_ticket_action_to_validate"
+              sequence="20"/>
+
+    <!-- Apprentissage -->
+    <menuitem id="menu_js_depenses_learning"
+              name="Apprentissage"
+              parent="menu_js_depenses_root"
+              sequence="20"/>
+
+    <menuitem id="menu_js_depense_account_rule"
+              name="Règles apprises"
+              parent="menu_js_depenses_learning"
+              action="js_depense_account_rule_action"
+              sequence="10"/>
+
+    <menuitem id="menu_js_depense_partner_alias"
+              name="Correspondances d'enseignes"
+              parent="menu_js_depenses_learning"
+              action="js_depense_partner_alias_action"
+              sequence="20"/>
+
+    <menuitem id="menu_js_depense_correction"
+              name="Corrections"
+              parent="menu_js_depenses_learning"
+              action="js_depense_correction_action"
+              sequence="30"/>
+
+    <!-- Analyse -->
+    <menuitem id="menu_js_depenses_analysis"
+              name="Analyse"
+              parent="menu_js_depenses_root"
+              sequence="30"/>
+
+    <menuitem id="menu_js_depense_ticket_line"
+              name="Lignes de dépense"
+              parent="menu_js_depenses_analysis"
+              action="js_depense_ticket_line_action"
+              sequence="10"/>
+
+    <menuitem id="menu_js_ai_log"
+              name="Échanges IA"
+              parent="menu_js_depenses_analysis"
+              action="js_ai_log_action"
+              sequence="20"
+              groups="js_depenses_ia.group_js_depense_manager"/>
+
+    <!-- Configuration -->
+    <menuitem id="menu_js_depenses_config"
+              name="Configuration"
+              parent="menu_js_depenses_root"
+              sequence="90"
+              groups="js_depenses_ia.group_js_depense_manager"/>
+
+    <menuitem id="menu_js_ai_provider"
+              name="Moteurs IA"
+              parent="menu_js_depenses_config"
+              action="js_ai_provider_action"
+              sequence="10"/>
+
+</odoo>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Lien retour : depuis l'écriture comptable, retrouver le ticket de
+        dépense qui l'a générée. Réservé au groupe Responsable, qui est
+        aussi le seul habilité à comptabiliser les tickets.
+    -->
+    <record id="account_move_view_form_js_depenses" model="ir.ui.view">
+        <field name="name">account.move.form.js.depenses</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_js_depense_ticket" type="object"
+                        class="oe_stat_button" icon="fa-receipt"
+                        invisible="not js_depense_ticket_id"
+                        groups="js_depenses_ia.group_js_depense_manager">
+                    <div class="o_stat_info">
+                        <span class="o_stat_text">Ticket de dépense</span>
+                    </div>
+                </button>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

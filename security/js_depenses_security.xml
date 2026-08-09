@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="module_category_js_depenses" model="ir.module.category">
+        <field name="name">Dépenses IA</field>
+        <field name="description">Saisie automatisée des tickets de dépense</field>
+        <field name="sequence">20</field>
+    </record>
+
+    <record id="group_js_depense_user" model="res.groups">
+        <field name="name">Saisie des tickets</field>
+        <field name="category_id" ref="module_category_js_depenses"/>
+        <field name="comment">Peut créer et vérifier des tickets de dépense,
+            sans pouvoir les comptabiliser.</field>
+    </record>
+
+    <record id="group_js_depense_manager" model="res.groups">
+        <field name="name">Comptabilisation et configuration</field>
+        <field name="category_id" ref="module_category_js_depenses"/>
+        <field name="implied_ids" eval="[(4, ref('group_js_depense_user'))]"/>
+        <field name="comment">Peut comptabiliser les tickets, gérer les
+            règles apprises et configurer les moteurs d'analyse.</field>
+    </record>
+
+    <record id="js_depense_ticket_company_rule" model="ir.rule">
+        <field name="name">Ticket de dépense : société courante</field>
+        <field name="model_id" ref="model_js_depense_ticket"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+
+    <record id="js_depense_ticket_line_company_rule" model="ir.rule">
+        <field name="name">Ligne de ticket : société courante</field>
+        <field name="model_id" ref="model_js_depense_ticket_line"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+
+    <record id="js_depense_account_rule_company_rule" model="ir.rule">
+        <field name="name">Règle apprise : société courante</field>
+        <field name="model_id" ref="model_js_depense_account_rule"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+
+    <record id="js_depense_partner_alias_company_rule" model="ir.rule">
+        <field name="name">Correspondance enseigne : société courante</field>
+        <field name="model_id" ref="model_js_depense_partner_alias"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+
+    <record id="js_depense_correction_company_rule" model="ir.rule">
+        <field name="name">Correction : société courante</field>
+        <field name="model_id" ref="model_js_depense_correction"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+
+</odoo>

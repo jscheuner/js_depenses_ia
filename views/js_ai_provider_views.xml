@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="js_ai_provider_view_list" model="ir.ui.view">
+        <field name="name">js.ai.provider.list</field>
+        <field name="model">js.ai.provider</field>
+        <field name="arch" type="xml">
+            <list string="Moteurs IA">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="provider_type"/>
+                <field name="base_url"/>
+                <field name="model_vision"/>
+                <field name="model_text" optional="show"/>
+                <field name="is_default" widget="boolean_toggle"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="js_ai_provider_view_form" model="ir.ui.view">
+        <field name="name">js.ai.provider.form</field>
+        <field name="model">js.ai.provider</field>
+        <field name="arch" type="xml">
+            <form string="Moteur IA">
+                <header>
+                    <button name="action_test_connection" type="object"
+                            string="Tester la connexion" class="btn-primary"
+                            icon="fa-plug"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_logs" type="object"
+                                class="oe_stat_button" icon="fa-comments">
+                            <field name="log_count" widget="statinfo"
+                                   string="Échanges"/>
+                        </button>
+                    </div>
+                    <widget name="web_ribbon" title="Archivé"
+                            bg_color="text-bg-danger" invisible="active"/>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" placeholder="Ollama local"/></h1>
+                    </div>
+                    <group>
+                        <group string="Service">
+                            <field name="provider_type"/>
+                            <field name="url_is_fixed" invisible="1"/>
+                            <field name="base_url" readonly="url_is_fixed"
+                                   placeholder="http://192.168.1.68:11434"/>
+                            <field name="is_default"/>
+                            <field name="active"/>
+                        </group>
+                        <group string="Modèles">
+                            <field name="model_vision"/>
+                            <field name="model_text"
+                                   placeholder="Identique au modèle vision"/>
+                            <field name="supports_json_schema"/>
+                        </group>
+                    </group>
+
+                    <group string="Clé d'API" invisible="provider_type == 'ollama'">
+                        <field name="api_key_configured" invisible="1"/>
+                        <field name="api_key_value" password="True"
+                               placeholder="Collez la clé fournie par le service..."/>
+                        <field name="api_key_param" groups="base.group_no_one"/>
+                    </group>
+                    <div class="alert alert-success py-1" role="alert"
+                         invisible="provider_type == 'ollama' or not api_key_configured">
+                        <i class="fa fa-check me-1"/>
+                        Une clé est enregistrée pour ce moteur.
+                    </div>
+                    <div class="alert alert-warning py-1" role="alert"
+                         invisible="provider_type == 'ollama' or api_key_configured">
+                        <i class="fa fa-exclamation-triangle me-1"/>
+                        Aucune clé n'est encore enregistrée : la connexion échouera
+                        tant que le champ « Clé d'API » ci-dessus n'aura pas été
+                        renseigné puis la fiche enregistrée.
+                    </div>
+
+                    <group string="Paramètres d'appel">
+                        <group>
+                            <field name="temperature"/>
+                            <field name="timeout"/>
+                        </group>
+                        <group>
+                            <field name="max_retries"/>
+                            <field name="sequence"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="js_ai_provider_action" model="ir.actions.act_window">
+        <field name="name">Moteurs IA</field>
+        <field name="res_model">js.ai.provider</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+</odoo>

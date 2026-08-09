@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="js_depense_ticket_line_view_list" model="ir.ui.view">
+        <field name="name">js.depense.ticket.line.list</field>
+        <field name="model">js.depense.ticket.line</field>
+        <field name="arch" type="xml">
+            <list string="Lignes de dépense" create="false">
+                <field name="ticket_id"/>
+                <field name="name"/>
+                <field name="account_id"/>
+                <field name="account_source" widget="badge"
+                       decoration-success="account_source == 'learned'"
+                       decoration-info="account_source == 'ai'"/>
+                <field name="tax_ids" widget="many2many_tags"/>
+                <field name="price_subtotal" sum="Total HT"/>
+                <field name="price_tax" sum="Total TVA"/>
+                <field name="price_total" sum="Total TTC"/>
+                <field name="currency_id" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="js_depense_ticket_line_view_search" model="ir.ui.view">
+        <field name="name">js.depense.ticket.line.search</field>
+        <field name="model">js.depense.ticket.line</field>
+        <field name="arch" type="xml">
+            <search string="Lignes de dépense">
+                <field name="name"/>
+                <field name="account_id"/>
+                <field name="ticket_id"/>
+                <filter name="filter_no_account" string="Sans compte"
+                        domain="[('account_id', '=', False)]"/>
+                <filter name="filter_learned" string="Affecté par apprentissage"
+                        domain="[('account_source', '=', 'learned')]"/>
+                <filter name="filter_ai" string="Affecté par l'IA"
+                        domain="[('account_source', '=', 'ai')]"/>
+                <group expand="0" string="Regrouper par">
+                    <filter name="group_account" string="Compte"
+                            context="{'group_by': 'account_id'}"/>
+                    <filter name="group_source" string="Origine"
+                            context="{'group_by': 'account_source'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="js_depense_ticket_line_action" model="ir.actions.act_window">
+        <field name="name">Lignes de dépense</field>
+        <field name="res_model">js.depense.ticket.line</field>
+        <field name="view_mode">list</field>
+        <field name="search_view_id" ref="js_depense_ticket_line_view_search"/>
+    </record>
+
+</odoo>

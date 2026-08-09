@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="js_depense_correction_view_list" model="ir.ui.view">
+        <field name="name">js.depense.correction.list</field>
+        <field name="model">js.depense.correction</field>
+        <field name="arch" type="xml">
+            <list string="Corrections" create="false" edit="false">
+                <field name="create_date" string="Date"/>
+                <field name="ticket_id"/>
+                <field name="partner_id" optional="show"/>
+                <field name="field_label" string="Champ"/>
+                <field name="source" widget="badge"
+                       decoration-info="source == 'ai'"
+                       decoration-success="source == 'learned'"/>
+                <field name="label_raw" string="Libellé" optional="show"/>
+                <field name="value_old" string="Avant"/>
+                <field name="value_new" string="Après"/>
+                <field name="ai_confidence" optional="hide"/>
+                <field name="user_id" optional="show"/>
+                <field name="company_id" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="js_depense_correction_view_form" model="ir.ui.view">
+        <field name="name">js.depense.correction.form</field>
+        <field name="model">js.depense.correction</field>
+        <field name="arch" type="xml">
+            <form string="Correction" create="false" edit="false">
+                <sheet>
+                    <group>
+                        <group string="Contexte">
+                            <field name="ticket_id"/>
+                            <field name="line_id"/>
+                            <field name="partner_id"/>
+                            <field name="label_raw"/>
+                            <field name="label_normalized"/>
+                        </group>
+                        <group string="Correction">
+                            <field name="field_name"/>
+                            <field name="field_label"/>
+                            <field name="source"/>
+                            <field name="value_old"/>
+                            <field name="value_new"/>
+                        </group>
+                    </group>
+                    <group string="Origine">
+                        <group>
+                            <field name="ai_provider_id"/>
+                            <field name="ai_model"/>
+                            <field name="ai_confidence"/>
+                        </group>
+                        <group>
+                            <field name="user_id"/>
+                            <field name="create_date"/>
+                            <field name="rule_id"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="js_depense_correction_view_search" model="ir.ui.view">
+        <field name="name">js.depense.correction.search</field>
+        <field name="model">js.depense.correction</field>
+        <field name="arch" type="xml">
+            <search string="Corrections">
+                <field name="ticket_id"/>
+                <field name="partner_id"/>
+                <field name="field_name"/>
+                <field name="label_raw"/>
+                <filter name="filter_ai" string="Erreurs de l'IA"
+                        domain="[('source', '=', 'ai')]"/>
+                <filter name="filter_learned" string="Règles contredites"
+                        domain="[('source', '=', 'learned')]"/>
+                <separator/>
+                <filter name="filter_account" string="Sur le compte"
+                        domain="[('field_name', '=', 'account_id')]"/>
+                <filter name="filter_amount" string="Sur un montant"
+                        domain="[('field_name', 'in', ('price_unit', 'amount_total_ticket'))]"/>
+                <group expand="0" string="Regrouper par">
+                    <filter name="group_field" string="Champ"
+                            context="{'group_by': 'field_name'}"/>
+                    <filter name="group_source" string="Origine"
+                            context="{'group_by': 'source'}"/>
+                    <filter name="group_partner" string="Fournisseur"
+                            context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_date" string="Mois"
+                            context="{'group_by': 'create_date:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="js_depense_correction_action" model="ir.actions.act_window">
+        <field name="name">Corrections</field>
+        <field name="res_model">js.depense.correction</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="js_depense_correction_view_search"/>
+        <field name="context">{'search_default_group_field': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Aucune correction enregistrée
+            </p>
+            <p>
+                Chaque modification que vous apportez à une valeur proposée
+                automatiquement est consignée ici. C'est ce qui permet de
+                mesurer si le système progresse réellement.
+            </p>
+        </field>
+    </record>
+
+</odoo>

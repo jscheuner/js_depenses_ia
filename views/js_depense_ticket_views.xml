@@ -1,0 +1,417 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============================================================ -->
+    <!-- Formulaire                                                    -->
+    <!-- ============================================================ -->
+    <record id="js_depense_ticket_view_form" model="ir.ui.view">
+        <field name="name">js.depense.ticket.form</field>
+        <field name="model">js.depense.ticket</field>
+        <field name="arch" type="xml">
+            <form string="Ticket de dépense">
+                <header>
+                    <button name="action_analyze_ai_notify" type="object"
+                            string="Analyser avec l'IA" class="btn-primary"
+                            icon="fa-magic"
+                            invisible="state in ('posted', 'cancel') or attachment_count == 0"/>
+                    <button name="action_apply_learned_rules" type="object"
+                            string="Appliquer les règles apprises"
+                            icon="fa-graduation-cap"
+                            invisible="state in ('posted', 'cancel')"/>
+                    <button name="action_retry_analysis" type="object"
+                            string="Relancer l'analyse" icon="fa-repeat"
+                            invisible="not ai_error_message or state in ('posted', 'cancel')"/>
+                    <button name="action_validate" type="object"
+                            string="Vérifier" class="btn-primary"
+                            invisible="state not in ('draft', 'to_validate')"/>
+                    <button name="action_post" type="object"
+                            string="Comptabiliser" class="btn-primary"
+                            groups="js_depenses_ia.group_js_depense_manager"
+                            invisible="state != 'validated'"/>
+                    <button name="action_undo_posting" type="object"
+                            string="Annuler la comptabilisation"
+                            groups="js_depenses_ia.group_js_depense_manager"
+                            confirm="L'écriture comptable sera définitivement supprimée et le ticket repassera en brouillon. Continuer ?"
+                            invisible="state != 'posted'"/>
+                    <button name="action_reset_to_draft" type="object"
+                            string="Repasser en brouillon"
+                            invisible="state in ('draft', 'posted')"/>
+                    <button name="action_cancel" type="object"
+                            string="Annuler"
+                            invisible="state in ('posted', 'cancel')"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,to_validate,validated,posted"/>
+                </header>
+
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_move" type="object"
+                                class="oe_stat_button" icon="fa-book"
+                                invisible="not move_id">
+                            <div class="o_stat_info">
+                                <span class="o_stat_text">Écriture</span>
+                                <field name="move_state" class="o_stat_value"/>
+                            </div>
+                        </button>
+                        <button name="action_open_corrections" type="object"
+                                class="oe_stat_button" icon="fa-pencil-square-o"
+                                invisible="correction_count == 0">
+                            <field name="correction_count" widget="statinfo"
+                                   string="Corrections"/>
+                        </button>
+                        <button name="action_open_ai_logs" type="object"
+                                class="oe_stat_button" icon="fa-comments"
+                                invisible="ai_log_count == 0">
+                            <field name="ai_log_count" widget="statinfo"
+                                   string="Échanges IA"/>
+                        </button>
+                    </div>
+
+                    <widget name="web_ribbon" title="Comptabilisé"
+                            bg_color="text-bg-success"
+                            invisible="state != 'posted'"/>
+                    <widget name="web_ribbon" title="Annulé"
+                            bg_color="text-bg-danger"
+                            invisible="state != 'cancel'"/>
+
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+
+                    <!-- Analyse automatique en attente ou en échec -->
+                    <div class="alert alert-info py-1" role="alert"
+                         invisible="not needs_ai_analysis">
+                        <i class="fa fa-hourglass-half me-1"/>
+                        <span>Ce ticket attend son analyse automatique.</span>
+                    </div>
+                    <div class="alert alert-danger py-1" role="alert"
+                         invisible="not ai_error_message">
+                        <i class="fa fa-exclamation-circle me-1"/>
+                        <b>L'analyse automatique a échoué :</b>
+                        <field name="ai_error_message" readonly="1"
+                               nolabel="1" class="d-inline"/>
+                    </div>
+
+                    <!-- Bandeau de contrôle des montants -->
+                    <div class="alert alert-danger" role="alert"
+                         invisible="is_reconciled or amount_total_ticket == 0">
+                        <i class="fa fa-exclamation-triangle me-1"/>
+                        <field name="difference_message" readonly="1"
+                               nolabel="1" class="d-inline"/>
+                    </div>
+                    <div class="alert alert-success py-1" role="alert"
+                         invisible="not is_reconciled">
+                        <i class="fa fa-check me-1"/>
+                        <span>Le total correspond exactement au ticket.</span>
+                    </div>
+                    <div class="alert alert-warning py-1" role="alert"
+                         invisible="amount_total_ticket != 0 or state in ('posted', 'cancel')">
+                        <i class="fa fa-exclamation-triangle me-1"/>
+                        <span>
+                            Aucun total n'a été lu sur le ticket : le contrôle
+                            au centime est inactif. Vérifiez les lignes avec
+                            une attention particulière.
+                        </span>
+                    </div>
+
+                    <group>
+                        <group string="Ticket">
+                            <field name="partner_id"
+                                   options="{'no_quick_create': True}"
+                                   readonly="state in ('posted', 'cancel')"/>
+                            <field name="partner_name_raw"
+                                   invisible="not partner_name_raw"
+                                   readonly="1"/>
+                            <field name="ticket_date"
+                                   readonly="state in ('posted', 'cancel')"/>
+                            <field name="reference"
+                                   readonly="state in ('posted', 'cancel')"/>
+                            <field name="description"
+                                   readonly="state in ('posted', 'cancel')"/>
+                        </group>
+                        <group string="Comptabilisation">
+                            <field name="journal_id"
+                                   readonly="state in ('posted', 'cancel')"/>
+                            <field name="counterpart_account_id"
+                                   readonly="state in ('posted', 'cancel')"/>
+                            <field name="payment_kind"
+                                   readonly="state in ('posted', 'cancel')"/>
+                            <field name="accounting_date"
+                                   readonly="state in ('posted', 'cancel')"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="currency_id" groups="base.group_multi_currency"/>
+                            <field name="user_id"/>
+                            <field name="origin"/>
+                            <field name="needs_ai_analysis" invisible="1"/>
+                            <field name="ai_error_message" invisible="1"/>
+                            <field name="attachment_count" invisible="1"/>
+                        </group>
+                    </group>
+
+                    <div class="row">
+                    <div class="col-lg-8">
+                    <notebook>
+                        <page string="Lignes" name="lines">
+                            <field name="line_ids"
+                                   readonly="state in ('posted', 'cancel')"
+                                   context="{'default_ticket_id': id}">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="name"/>
+                                    <field name="account_id"
+                                           options="{'no_create': True}"/>
+                                    <field name="account_source"
+                                           optional="show" readonly="1"
+                                           widget="badge"
+                                           decoration-success="account_source == 'learned'"
+                                           decoration-info="account_source == 'ai'"/>
+                                    <field name="tax_ids" widget="many2many_tags"
+                                           options="{'no_create': True}"/>
+                                    <field name="price_mode_label" string="Mode"
+                                           readonly="1" optional="show"/>
+                                    <field name="quantity" optional="hide"/>
+                                    <field name="price_unit"/>
+                                    <field name="price_subtotal" readonly="1"
+                                           optional="show"/>
+                                    <field name="price_tax" readonly="1"
+                                           optional="show"/>
+                                    <field name="price_total" readonly="1"/>
+                                    <field name="currency_id" column_invisible="1"/>
+                                    <field name="company_id" column_invisible="1"/>
+                                    <field name="tax_is_included" column_invisible="1"/>
+                                    <field name="ai_confidence" optional="hide"
+                                           readonly="1"/>
+                                </list>
+                            </field>
+
+                            <group class="oe_subtotal_footer oe_right">
+                                <field name="amount_untaxed"/>
+                                <field name="amount_tax"/>
+                                <field name="amount_total"
+                                       class="oe_subtotal_footer_separator"/>
+                                <field name="amount_total_ticket"
+                                       readonly="state in ('posted', 'cancel')"
+                                       class="oe_subtotal_footer_separator"/>
+                                <field name="amount_difference" readonly="1"
+                                       decoration-danger="amount_difference != 0"/>
+                                <field name="is_reconciled" invisible="1"/>
+                            </group>
+                            <div class="clearfix"/>
+                        </page>
+
+                        <page string="Récapitulatif TVA" name="taxes">
+                            <button name="action_rebuild_tax_lines" type="object"
+                                    string="Recalculer" icon="fa-refresh"
+                                    class="btn-link"
+                                    invisible="state in ('posted', 'cancel')"/>
+                            <field name="tax_line_ids"
+                                   readonly="state in ('posted', 'cancel')">
+                                <list editable="bottom" create="false"
+                                      delete="false">
+                                    <field name="tax_id" readonly="1"/>
+                                    <field name="tax_rate" readonly="1"/>
+                                    <field name="price_include" readonly="1"
+                                           optional="show"/>
+                                    <field name="base_amount" readonly="1"/>
+                                    <field name="tax_amount" readonly="1"/>
+                                    <field name="tax_amount_ticket"/>
+                                    <field name="difference" readonly="1"
+                                           decoration-danger="has_difference"/>
+                                    <field name="has_difference" column_invisible="1"/>
+                                    <field name="currency_id" column_invisible="1"/>
+                                </list>
+                            </field>
+                            <div class="text-muted mt-2">
+                                <i class="fa fa-info-circle me-1"/>
+                                Renseignez la colonne « TVA imprimée » lorsque le
+                                ticket détaille la TVA par taux : le contrôle
+                                devient alors opposable taux par taux.
+                            </div>
+                        </page>
+
+                        <page string="Analyse IA" name="ai" groups="js_depenses_ia.group_js_depense_manager">
+                            <group>
+                                <group>
+                                    <field name="ai_provider_id"
+                                           readonly="state in ('posted', 'cancel')"/>
+                                    <field name="ai_confidence" readonly="1"
+                                           widget="percentage"/>
+                                </group>
+                            </group>
+                            <field name="ai_raw_json" readonly="1" nolabel="1"
+                                   invisible="not ai_raw_json"/>
+                        </page>
+
+                        <page string="Notes" name="notes">
+                            <field name="note" placeholder="Notes internes..."/>
+                        </page>
+                    </notebook>
+                    </div>
+                    <div class="col-lg-4">
+                        <field name="attachment_preview" widget="image"
+                               nolabel="1" class="w-100"
+                               options="{'zoom': true}"/>
+                    </div>
+                    </div>
+                </sheet>
+
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ============================================================ -->
+    <!-- Liste                                                         -->
+    <!-- ============================================================ -->
+    <record id="js_depense_ticket_view_list" model="ir.ui.view">
+        <field name="name">js.depense.ticket.list</field>
+        <field name="model">js.depense.ticket</field>
+        <field name="arch" type="xml">
+            <list string="Tickets de dépense"
+                  decoration-muted="state == 'cancel'"
+                  decoration-success="state == 'posted'"
+                  decoration-danger="amount_total_ticket != 0 and not is_reconciled">
+                <field name="name"/>
+                <field name="ticket_date"/>
+                <field name="partner_id"/>
+                <field name="description" optional="show"/>
+                <field name="journal_id" optional="hide"/>
+                <field name="amount_untaxed" optional="hide" sum="Total HT"/>
+                <field name="amount_tax" optional="hide" sum="Total TVA"/>
+                <field name="amount_total" sum="Total calculé"/>
+                <field name="amount_total_ticket" optional="show"/>
+                <field name="amount_difference" optional="show"
+                       decoration-danger="amount_difference != 0"/>
+                <field name="is_reconciled" widget="boolean_toggle"
+                       optional="hide" readonly="1"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'posted'"
+                       decoration-info="state == 'validated'"
+                       decoration-warning="state == 'to_validate'"/>
+                <field name="currency_id" column_invisible="1"/>
+                <field name="company_id" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ============================================================ -->
+    <!-- Kanban (orienté mobile)                                       -->
+    <!-- ============================================================ -->
+    <record id="js_depense_ticket_view_kanban" model="ir.ui.view">
+        <field name="name">js.depense.ticket.kanban</field>
+        <field name="model">js.depense.ticket</field>
+        <field name="arch" type="xml">
+            <kanban class="o_kanban_mobile" sample="1">
+                <field name="state"/>
+                <field name="currency_id"/>
+                <field name="is_reconciled"/>
+                <templates>
+                    <t t-name="card">
+                        <div class="row">
+                            <div class="col-8">
+                                <strong><field name="partner_id"/></strong>
+                                <div class="text-muted">
+                                    <field name="name"/>
+                                </div>
+                            </div>
+                            <div class="col-4 text-end">
+                                <strong>
+                                    <field name="amount_total"
+                                           widget="monetary"/>
+                                </strong>
+                            </div>
+                        </div>
+                        <div class="row mt-1">
+                            <div class="col-6 text-muted">
+                                <i class="fa fa-calendar me-1"/>
+                                <field name="ticket_date"/>
+                            </div>
+                            <div class="col-6 text-end">
+                                <field name="state" widget="label_selection"
+                                       options="{'classes': {'draft': 'default', 'to_validate': 'warning', 'validated': 'info', 'posted': 'success', 'cancel': 'danger'}}"/>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!-- ============================================================ -->
+    <!-- Recherche                                                     -->
+    <!-- ============================================================ -->
+    <record id="js_depense_ticket_view_search" model="ir.ui.view">
+        <field name="name">js.depense.ticket.search</field>
+        <field name="model">js.depense.ticket</field>
+        <field name="arch" type="xml">
+            <search string="Tickets de dépense">
+                <field name="name" string="Ticket"
+                       filter_domain="['|', '|', ('name', 'ilike', self), ('reference', 'ilike', self), ('description', 'ilike', self)]"/>
+                <field name="partner_id"/>
+                <field name="journal_id"/>
+                <field name="user_id"/>
+
+                <filter name="filter_draft" string="Brouillon"
+                        domain="[('state', '=', 'draft')]"/>
+                <filter name="filter_to_validate" string="À vérifier"
+                        domain="[('state', '=', 'to_validate')]"/>
+                <filter name="filter_validated" string="Vérifié"
+                        domain="[('state', '=', 'validated')]"/>
+                <filter name="filter_posted" string="Comptabilisé"
+                        domain="[('state', '=', 'posted')]"/>
+                <separator/>
+                <filter name="filter_discrepancy" string="Écart de montant"
+                        domain="[('is_reconciled', '=', False), ('amount_total_ticket', '!=', 0)]"/>
+                <filter name="filter_no_account" string="Compte manquant"
+                        domain="[('line_ids.account_id', '=', False)]"/>
+                <separator/>
+                <filter name="filter_my" string="Mes tickets"
+                        domain="[('user_id', '=', uid)]"/>
+                <separator/>
+                <filter name="filter_this_month" string="Ce mois-ci"
+                        domain="[('ticket_date', '&gt;=', (context_today() + relativedelta(day=1)).strftime('%Y-%m-%d'))]"/>
+
+                <group expand="0" string="Regrouper par">
+                    <filter name="group_partner" string="Fournisseur"
+                            context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_state" string="État"
+                            context="{'group_by': 'state'}"/>
+                    <filter name="group_journal" string="Journal"
+                            context="{'group_by': 'journal_id'}"/>
+                    <filter name="group_date" string="Date du ticket"
+                            context="{'group_by': 'ticket_date:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ============================================================ -->
+    <!-- Actions                                                       -->
+    <!-- ============================================================ -->
+    <record id="js_depense_ticket_action" model="ir.actions.act_window">
+        <field name="name">Tickets de dépense</field>
+        <field name="res_model">js.depense.ticket</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="search_view_id" ref="js_depense_ticket_view_search"/>
+        <field name="context">{'search_default_filter_draft': 1, 'search_default_filter_to_validate': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Enregistrez votre premier ticket de dépense
+            </p>
+            <p>
+                Photographiez ou scannez un ticket, puis lancez l'analyse
+                automatique. Les montants extraits sont systématiquement
+                confrontés au total imprimé avant toute comptabilisation.
+            </p>
+        </field>
+    </record>
+
+    <record id="js_depense_ticket_action_to_validate" model="ir.actions.act_window">
+        <field name="name">À vérifier</field>
+        <field name="res_model">js.depense.ticket</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="domain">[('state', 'in', ('draft', 'to_validate', 'analyzing'))]</field>
+        <field name="search_view_id" ref="js_depense_ticket_view_search"/>
+    </record>
+
+</odoo>

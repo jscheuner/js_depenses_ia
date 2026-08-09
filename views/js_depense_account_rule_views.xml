@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="js_depense_account_rule_view_list" model="ir.ui.view">
+        <field name="name">js.depense.account.rule.list</field>
+        <field name="model">js.depense.account.rule</field>
+        <field name="arch" type="xml">
+            <list string="Règles apprises" create="false"
+                  decoration-muted="not active"
+                  decoration-success="confidence &gt;= 0.8"
+                  decoration-warning="confidence &lt; 0.5">
+                <field name="label_key"/>
+                <field name="label_sample" optional="show"/>
+                <field name="partner_id" optional="show"/>
+                <field name="account_id"/>
+                <field name="tax_ids" widget="many2many_tags" optional="hide"/>
+                <field name="hit_count" optional="show"/>
+                <field name="confirm_count" optional="show"/>
+                <field name="reject_count" optional="show"
+                       decoration-danger="reject_count &gt; 0"/>
+                <field name="confidence" widget="percentage"/>
+                <field name="last_used" optional="hide"/>
+                <field name="active" widget="boolean_toggle" optional="show"/>
+                <field name="company_id" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="js_depense_account_rule_view_form" model="ir.ui.view">
+        <field name="name">js.depense.account.rule.form</field>
+        <field name="model">js.depense.account.rule</field>
+        <field name="arch" type="xml">
+            <form string="Règle apprise">
+                <header>
+                    <button name="action_reset_counters" type="object"
+                            string="Réinitialiser les compteurs"/>
+                    <button name="action_reactivate" type="object"
+                            string="Réactiver" invisible="active"/>
+                </header>
+                <sheet>
+                    <widget name="web_ribbon" title="Désactivée"
+                            bg_color="text-bg-danger" invisible="active"/>
+                    <group>
+                        <group string="Déclencheur">
+                            <field name="label_key"/>
+                            <field name="label_sample"/>
+                            <field name="partner_id"/>
+                            <field name="is_global"/>
+                        </group>
+                        <group string="Affectation">
+                            <field name="account_id"/>
+                            <field name="tax_ids" widget="many2many_tags"/>
+                            <field name="priority"/>
+                            <field name="active"/>
+                        </group>
+                    </group>
+                    <group string="Fiabilité observée">
+                        <group>
+                            <field name="hit_count"/>
+                            <field name="confirm_count"/>
+                            <field name="reject_count"/>
+                        </group>
+                        <group>
+                            <field name="confidence" widget="percentage"/>
+                            <field name="last_used"/>
+                            <field name="company_id"
+                                   groups="base.group_multi_company"/>
+                        </group>
+                    </group>
+                    <div class="text-muted">
+                        <i class="fa fa-info-circle me-1"/>
+                        Cette règle est née d'une correction manuelle. Elle se
+                        renforce à chaque validation sans retouche et se
+                        désactive d'elle-même si elle est trop souvent
+                        contredite.
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="js_depense_account_rule_view_search" model="ir.ui.view">
+        <field name="name">js.depense.account.rule.search</field>
+        <field name="model">js.depense.account.rule</field>
+        <field name="arch" type="xml">
+            <search string="Règles apprises">
+                <field name="label_key"/>
+                <field name="account_id"/>
+                <field name="partner_id"/>
+                <filter name="filter_global" string="Règles générales"
+                        domain="[('partner_id', '=', False)]"/>
+                <filter name="filter_partner" string="Propres à un fournisseur"
+                        domain="[('partner_id', '!=', False)]"/>
+                <separator/>
+                <filter name="filter_reliable" string="Fiables"
+                        domain="[('confidence', '&gt;=', 0.8)]"/>
+                <filter name="filter_doubtful" string="À surveiller"
+                        domain="[('reject_count', '&gt;', 0)]"/>
+                <filter name="filter_inactive" string="Désactivées"
+                        domain="[('active', '=', False)]"/>
+                <group expand="0" string="Regrouper par">
+                    <filter name="group_account" string="Compte"
+                            context="{'group_by': 'account_id'}"/>
+                    <filter name="group_partner" string="Fournisseur"
+                            context="{'group_by': 'partner_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="js_depense_account_rule_action" model="ir.actions.act_window">
+        <field name="name">Règles apprises</field>
+        <field name="res_model">js.depense.account.rule</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="js_depense_account_rule_view_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Aucune règle pour l'instant
+            </p>
+            <p>
+                Les règles se créent automatiquement au fil de vos corrections.
+                Corrigez le compte d'une ligne, validez le ticket, et la même
+                dépense sera affectée toute seule la prochaine fois.
+            </p>
+        </field>
+    </record>
+
+</odoo>

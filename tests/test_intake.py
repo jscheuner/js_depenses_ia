@@ -181,7 +181,6 @@ class TestIntake(JsDepensesCommon):
         wizard = self.env['js.depense.ticket.upload'].create({
             'attachment_ids': [(6, 0, attachments.ids)],
             'journal_id': self.journal.id,
-            'analyze_now': False,
         })
         action = wizard.action_create_tickets()
 
@@ -189,17 +188,20 @@ class TestIntake(JsDepensesCommon):
         self.assertEqual(len(tickets), 2)
         for ticket in tickets:
             self.assertEqual(ticket.origin, 'upload')
-            self.assertTrue(ticket.needs_ai_analysis)
+            # L'analyse est toujours enfilée immédiatement (voir
+            # docs/05_IA.md) : needs_ai_analysis retombe à faux dès
+            # l'enfilement, le job lui-même n'étant pas exécuté ici.
+            self.assertFalse(ticket.needs_ai_analysis)
+            self.assertEqual(ticket.state, 'analyzing')
             self.assertEqual(len(ticket.attachment_ids), 1)
 
     def test_upload_failure_does_not_block_other_tickets(self):
         """L'échec d'un ticket n'empêche pas le traitement des autres.
 
-        « Analyser immédiatement » enfile désormais un job (voir
-        docs/05_IA.md) plutôt que d'appeler le moteur en direct : le test
-        exécute ce job manuellement, comme le ferait un worker
-        ``queue_job``, pour vérifier que l'échec de chaque ticket reste
-        isolé au sein du lot.
+        Le dépôt enfile toujours un job (voir docs/05_IA.md) plutôt que
+        d'appeler le moteur en direct : le test exécute ce job
+        manuellement, comme le ferait un worker ``queue_job``, pour
+        vérifier que l'échec de chaque ticket reste isolé au sein du lot.
         """
         attachments = self.env['ir.attachment'].create([
             {'name': "ticket1.png", 'mimetype': 'image/png',
@@ -210,7 +212,6 @@ class TestIntake(JsDepensesCommon):
         wizard = self.env['js.depense.ticket.upload'].create({
             'attachment_ids': [(6, 0, attachments.ids)],
             'journal_id': self.journal.id,
-            'analyze_now': True,
         })
 
         def failing_run_vision_phase(self, ticket_arg, provider=None):
@@ -241,7 +242,6 @@ class TestIntake(JsDepensesCommon):
         wizard = self.env['js.depense.ticket.upload'].create({
             'attachment_ids': [(6, 0, attachment.ids)],
             'journal_id': self.journal.id,
-            'analyze_now': False,
             'ai_provider_id': provider.id,
         })
         action = wizard.action_create_tickets()

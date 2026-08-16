@@ -34,13 +34,6 @@ class JsDepenseTicketUpload(models.TransientModel):
         string="Date par défaut",
         help="Utilisée seulement si l'analyse ne parvient pas à lire la "
              "date sur le ticket.")
-    analyze_now = fields.Boolean(
-        string="Analyser immédiatement", default=True,
-        help="L'analyse est de toute façon toujours asynchrone (file "
-             "d'attente queue_job) : cette case ne détermine que le moment "
-             "où elle est mise en file. Décochez pour la reporter au "
-             "prochain passage du cron plutôt que de l'enfiler tout de "
-             "suite.")
     ai_provider_id = fields.Many2one(
         'js.ai.provider', string="Moteur IA",
         help="Laisser vide pour utiliser le moteur par défaut.")
@@ -56,8 +49,7 @@ class JsDepenseTicketUpload(models.TransientModel):
         for attachment in self.attachment_ids:
             tickets |= self._create_ticket_from_attachment(attachment)
 
-        if self.analyze_now:
-            self._analyze(tickets)
+        self._analyze(tickets)
 
         return self._open_result(tickets)
 
@@ -69,7 +61,7 @@ class JsDepenseTicketUpload(models.TransientModel):
             'partner_id': self.partner_id.id or False,
             'ticket_date': self.ticket_date or fields.Date.context_today(self),
             'origin': 'upload',
-            'needs_ai_analysis': not self.analyze_now,
+            'needs_ai_analysis': True,
             'ai_provider_id': self.ai_provider_id.id or False,
         })
         # La pièce est recopiée sur le ticket : l'assistant étant transitoire,

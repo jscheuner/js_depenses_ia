@@ -19,22 +19,12 @@
                 </group>
 
                 <group string="Traitement">
-                    <field name="analyze_now"/>
                     <field name="company_id"
                            groups="base.group_multi_company"/>
                     <field name="ai_provider_count" invisible="1"/>
                     <field name="ai_provider_id"
                            invisible="ai_provider_count &lt;= 1"/>
                 </group>
-
-                <div class="alert alert-warning py-1" role="alert"
-                     invisible="not analyze_now">
-                    <i class="fa fa-clock-o me-1"/>
-                    L'analyse immédiate peut prendre une trentaine de secondes
-                    par photo. Au-delà de quelques tickets, décochez
-                    « Analyser immédiatement » : le traitement se fera en
-                    arrière-plan.
-                </div>
 
                 <footer>
                     <button name="action_create_tickets" type="object"

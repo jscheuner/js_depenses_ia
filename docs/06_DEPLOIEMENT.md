@@ -277,10 +277,8 @@ réessayer (il repasse par la même file d'attente).
 ### Dépôt groupé depuis Odoo
 
 Alternative sans courriel : Dépenses IA → Tickets → **Déposer des
-tickets**. Une photo par ticket. L'analyse est toujours asynchrone ;
-l'option **Analyser tout de suite** (cochée par défaut) enfile le lot
-immédiatement plutôt que d'attendre le prochain passage de la tâche
-planifiée.
+tickets**. Une photo par ticket. L'analyse est toujours asynchrone et
+enfilée immédiatement à la création des tickets, sans option à cocher.
 
 ---
 

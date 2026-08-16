@@ -78,12 +78,22 @@ Prérequis impératifs, sans quoi les jobs restent en attente indéfiniment :
    développement (`workers = 0`, un seul thread), un job long bloque tout
    le serveur pour tous les utilisateurs — c'est le mode à éviter en
    production pour ce module en particulier.
-3. **Lancer le « job runner »** de `queue_job` : il démarre automatiquement
+3. **Limiter la capacité du canal** dans le fichier de configuration
+   Odoo (`/etc/odoo18.conf` ou équivalent) — `queue.job.channel` ne
+   porte aucun champ de capacité, cela se règle uniquement côté serveur :
+   ```ini
+   [queue_job]
+   channels = root.js_depenses:1
+   ```
+   Sans cette ligne, `queue_job` traite les jobs du canal avec sa
+   capacité par défaut (non limitée à 1), ce qui recharge le modèle sur
+   le GPU à chaque bascule vision/texte.
+4. **Lancer le « job runner »** de `queue_job` : il démarre automatiquement
    avec les workers Odoo (thread dédié à l'écoute des jobs en attente),
    rien à configurer côté systemd au-delà du redémarrage du service.
-4. Vérifier après installation, dans **Réglages techniques → Tâches en
-   file d'attente → Canaux**, que `root.js_depenses` (capacité 1) et ses
-   deux sous-canaux `vision`/`text` existent (créés par le module).
+5. Vérifier après installation, dans **Réglages techniques → Tâches en
+   file d'attente → Canaux**, que `root.js_depenses` et ses deux
+   sous-canaux `vision`/`text` existent (créés par le module).
 
 ---
 

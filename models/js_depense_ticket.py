@@ -2,6 +2,7 @@
 
 import json
 import logging
+from collections import defaultdict
 
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
@@ -170,6 +171,14 @@ class JsDepenseTicket(models.Model):
         'js.ai.provider', string="Moteur IA",
         help="Laisser vide pour utiliser le moteur par défaut.")
     ai_confidence = fields.Float(string="Confiance globale", digits=(3, 2))
+    ai_vision_text = fields.Text(
+        string="Lecture brute (vision)", copy=False, readonly=True,
+        help="Transcription libre du ticket produite par le modèle vision, "
+             "avant structuration en JSON par le modèle texte. Vide lorsque "
+             "le moteur produit directement le JSON (option « JSON "
+             "directement par le modèle vision »). Utile pour comprendre "
+             "une erreur de structuration sans consommer à nouveau le "
+             "modèle vision.")
     ai_raw_json = fields.Text(string="Réponse brute", copy=False)
     ai_log_ids = fields.One2many(
         'js.ai.log', 'ticket_id', string="Journal des échanges IA",
@@ -214,6 +223,11 @@ class JsDepenseTicket(models.Model):
             self.counterpart_account_id = (
                 self.journal_id.js_depense_counterpart_account_id
                 or self.company_id.js_depense_counterpart_account_id)
+
+    @api.onchange('ticket_date')
+    def _onchange_ticket_date(self):
+        if not self.accounting_date:
+            self.accounting_date = self.ticket_date
 
     # ------------------------------------------------------------------
     # Calculs
@@ -922,9 +936,19 @@ class JsDepenseTicket(models.Model):
     # ------------------------------------------------------------------
     # Analyse par intelligence artificielle
     # ------------------------------------------------------------------
+    # Nombre de tentatives (vision ou texte) avant abandon définitif d'un
+    # ticket : au-delà, seule une relance manuelle (action_retry_analysis)
+    # le remet en file. Voir docs/05_IA.md.
+    _AI_MAX_ATTEMPTS = 3
+
     def action_analyze_ai(self):
-        """Lance l'extraction automatique sur les pièces jointes."""
-        extractor = self.env['js.ticket.extractor']
+        """Met le ticket en file pour une analyse IA asynchrone.
+
+        Toujours asynchrone, y compris depuis ce bouton manuel : un appel
+        IA peut prendre plusieurs dizaines de secondes avec un modèle
+        local, largement au-delà du délai que le worker web accorde à une
+        requête (``limit_time_real``). Voir docs/05_IA.md.
+        """
         for ticket in self:
             if ticket.state in ('posted', 'cancel'):
                 raise UserError(_(
@@ -932,37 +956,132 @@ class JsDepenseTicket(models.Model):
             if not ticket.attachment_ids:
                 raise UserError(_(
                     "Joignez d'abord une photo ou un scan du ticket."))
-
-            previous_state = ticket.state
-            ticket.state = 'analyzing'
-            try:
-                extractor.analyze(ticket)
-            except Exception:
-                ticket.state = previous_state
-                raise
+        self._start_ai_analysis()
         return True
 
     def action_analyze_ai_notify(self):
-        """Variante affichant un compte rendu à l'issue de l'analyse."""
+        """Variante affichant un accusé de mise en file d'attente.
+
+        L'analyse étant asynchrone, son résultat n'est pas encore connu au
+        retour de cet appel : la notification confirme seulement que le
+        ticket a été enfilé, pas que l'extraction a réussi.
+        """
         self.ensure_one()
         self.action_analyze_ai()
-        if self.is_reconciled:
-            message = _("Extraction cohérente : le total correspond au ticket.")
-            kind = 'success'
-        else:
-            message = self.difference_message or _(
-                "Extraction terminée, des vérifications restent nécessaires.")
-            kind = 'warning'
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': _("Analyse du ticket"),
-                'message': message,
-                'type': kind,
-                'sticky': kind == 'warning',
+                'message': _(
+                    "L'analyse a été mise en file d'attente. Le ticket "
+                    "passera à « À vérifier » une fois le traitement "
+                    "terminé."),
+                'type': 'info',
+                'sticky': False,
             },
         }
+
+    def _start_ai_analysis(self, batch_size=None):
+        """Enfile les tickets pour l'analyse IA, par lots.
+
+        Toujours asynchrone (voir docs/05_IA.md). Les tickets sont
+        regroupés par société puis répartis en lots de ``batch_size``
+        (taille configurée par société par défaut) afin qu'un lot entier
+        passe par la phase vision avant la phase texte, plutôt que
+        ticket par ticket : avec un seul GPU local, alterner les deux
+        modèles à chaque ticket reviendrait à les charger et décharger en
+        boucle.
+        """
+        tickets = self.filtered(lambda t: t.state not in ('posted', 'cancel'))
+        if not tickets:
+            return True
+        tickets.write({
+            'state': 'analyzing',
+            'needs_ai_analysis': False,
+            'ai_error_message': False,
+        })
+
+        by_company = defaultdict(lambda: self.env['js.depense.ticket'])
+        for ticket in tickets:
+            by_company[ticket.company_id] |= ticket
+
+        for company, company_tickets in by_company.items():
+            size = batch_size or company.js_depense_ai_batch_size or 10
+            for offset in range(0, len(company_tickets), size):
+                batch = company_tickets[offset:offset + size]
+                batch.with_delay(
+                    description=_(
+                        "Analyse IA (vision) — lot de %s ticket(s)",
+                        len(batch)),
+                )._job_batch_vision()
+        return True
+
+    def _job_batch_vision(self):
+        """Job ``queue_job`` : phase vision pour un lot de tickets.
+
+        Les tickets dont le moteur ne produit pas directement le JSON
+        (``json_from_vision``) sont regroupés dans ``to_structure`` et
+        enchaînés dans un unique job texte, pour la même raison que le
+        lot vision lui-même : un seul basculement de modèle par lot.
+        """
+        extractor = self.env['js.ticket.extractor']
+        to_structure = self.env['js.depense.ticket']
+        for ticket in self:
+            try:
+                provider = extractor.run_vision_phase(ticket)
+                if not provider.json_from_vision:
+                    to_structure |= ticket
+            except Exception as error:
+                ticket._register_ai_failure(error)
+        if to_structure:
+            to_structure.with_delay(
+                description=_(
+                    "Analyse IA (texte) — lot de %s ticket(s)",
+                    len(to_structure)),
+            )._job_batch_text()
+        return True
+
+    def _job_batch_text(self):
+        """Job ``queue_job`` : phase texte (structuration JSON) d'un lot."""
+        extractor = self.env['js.ticket.extractor']
+        for ticket in self:
+            try:
+                extractor.run_text_phase(ticket)
+            except Exception as error:
+                ticket._register_ai_failure(error)
+        return True
+
+    def _register_ai_failure(self, error):
+        """Consigne l'échec d'une phase IA et programme, ou non, une relance.
+
+        Appelé pour chaque ticket individuellement, à l'intérieur d'un job
+        de lot : l'échec d'un ticket ne doit jamais faire échouer le job
+        (et donc les autres tickets du lot). La relance métier se fait via
+        le cron périodique, qui repique les tickets dont
+        ``needs_ai_analysis`` est repassé à vrai — pas via le
+        ``retry_pattern`` du job, réservé aux échecs francs (bug, base de
+        données injoignable). Voir docs/05_IA.md.
+        """
+        self.ensure_one()
+        message = str(error)[:255]
+        _logger.warning(
+            "Analyse automatique en échec pour le ticket %s : %s",
+            self.name, message)
+        self.ai_attempt_count += 1
+        self.write({
+            'state': 'draft',
+            'ai_error_message': message,
+            'needs_ai_analysis': self.ai_attempt_count < self._AI_MAX_ATTEMPTS,
+        })
+        if self.ai_attempt_count >= self._AI_MAX_ATTEMPTS:
+            self.message_post(body=_(
+                "<p><b>Analyse automatique abandonnée</b> après "
+                "%(count)s tentatives.</p><p>%(error)s</p>"
+                "<p>Le ticket peut être analysé manuellement ou saisi à la "
+                "main.</p>",
+                count=self.ai_attempt_count, error=message))
+        return True
 
     # ------------------------------------------------------------------
     # Réception directe (courriel, dépôt de photo)
@@ -1046,69 +1165,43 @@ class JsDepenseTicket(models.Model):
 
     @api.model
     def _cron_analyze_pending_tickets(self, limit=20):
-        """Analyse les tickets reçus, en dehors du flux de messagerie.
+        """Enfile les tickets reçus, en dehors du flux de messagerie.
 
-        Chaque ticket est traité dans sa propre sous-transaction : l'échec
-        de l'un ne doit pas empêcher le traitement des suivants.
+        Ne fait qu'enfiler les jobs d'analyse (voir ``_start_ai_analysis``) :
+        le traitement proprement dit a lieu dans ``_job_batch_vision`` puis
+        ``_job_batch_text``, exécutés par le(s) worker(s) ``queue_job`` en
+        respectant le canal exclusif du GPU. Voir docs/05_IA.md.
         """
-        max_attempts = 3
         pending = self.search([
             ('needs_ai_analysis', '=', True),
             ('state', 'in', ('draft', 'analyzing')),
-            ('ai_attempt_count', '<', max_attempts),
+            ('ai_attempt_count', '<', self._AI_MAX_ATTEMPTS),
         ], limit=limit)
+        if not pending:
+            return True
 
-        for ticket in pending:
-            ticket.ai_attempt_count += 1
-            try:
-                ticket._collect_linked_attachments()
-                if not ticket.attachment_ids:
-                    # Courriel sans pièce exploitable : inutile d'insister.
-                    ticket.write({
-                        'needs_ai_analysis': False,
-                        'ai_error_message': _(
-                            "Aucune photo ou aucun PDF exploitable n'était "
-                            "joint au message."),
-                    })
-                    ticket.message_post(body=_(
-                        "<p>Analyse abandonnée : le message ne contenait "
-                        "aucune pièce exploitable.</p>"))
-                    self.env.cr.commit()
-                    continue
-
-                self.env['js.ticket.extractor'].analyze(ticket)
-                ticket.write({
-                    'needs_ai_analysis': False,
-                    'ai_error_message': False,
-                })
+        pending._collect_linked_attachments()
+        without_attachment = pending.filtered(lambda t: not t.attachment_ids)
+        if without_attachment:
+            # Courriel sans pièce exploitable : inutile d'insister.
+            without_attachment.write({
+                'needs_ai_analysis': False,
+                'ai_error_message': _(
+                    "Aucune photo ou aucun PDF exploitable n'était joint "
+                    "au message."),
+            })
+            for ticket in without_attachment:
                 ticket.message_post(body=_(
-                    "<p>Analyse automatique terminée. "
-                    "Ce ticket attend maintenant une vérification.</p>"))
-                self.env.cr.commit()
-            except Exception as error:
-                self.env.cr.rollback()
-                message = str(error)[:255]
-                _logger.warning(
-                    "Analyse automatique en échec pour le ticket %s : %s",
-                    ticket.name, message)
-                ticket.write({
-                    'ai_error_message': message,
-                    'needs_ai_analysis':
-                        ticket.ai_attempt_count < max_attempts,
-                })
-                if ticket.ai_attempt_count >= max_attempts:
-                    ticket.message_post(body=_(
-                        "<p><b>Analyse automatique abandonnée</b> après "
-                        "%(count)s tentatives.</p><p>%(error)s</p>"
-                        "<p>Le ticket peut être analysé manuellement ou "
-                        "saisi à la main.</p>",
-                        count=ticket.ai_attempt_count, error=message))
-                self.env.cr.commit()
+                    "<p>Analyse abandonnée : le message ne contenait "
+                    "aucune pièce exploitable.</p>"))
+
+        (pending - without_attachment)._start_ai_analysis()
         return True
 
     def action_retry_analysis(self):
         """Relance une analyse abandonnée."""
         self.write({
+            'state': 'draft',
             'needs_ai_analysis': True,
             'ai_attempt_count': 0,
             'ai_error_message': False,

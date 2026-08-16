@@ -13,7 +13,7 @@
                     <button name="action_analyze_ai_notify" type="object"
                             string="Analyser avec l'IA" class="btn-primary"
                             icon="fa-magic"
-                            invisible="state in ('posted', 'cancel') or attachment_count == 0"/>
+                            invisible="state in ('posted', 'cancel', 'analyzing') or attachment_count == 0"/>
                     <button name="action_apply_learned_rules" type="object"
                             string="Appliquer les règles apprises"
                             icon="fa-graduation-cap"
@@ -40,7 +40,7 @@
                             string="Annuler"
                             invisible="state in ('posted', 'cancel')"/>
                     <field name="state" widget="statusbar"
-                           statusbar_visible="draft,to_validate,validated,posted"/>
+                           statusbar_visible="draft,analyzing,to_validate,validated,posted"/>
                 </header>
 
                 <sheet>
@@ -78,11 +78,18 @@
                         <h1><field name="name" readonly="1"/></h1>
                     </div>
 
-                    <!-- Analyse automatique en attente ou en échec -->
+                    <!-- Analyse automatique en attente, en cours, ou en échec -->
                     <div class="alert alert-info py-1" role="alert"
                          invisible="not needs_ai_analysis">
                         <i class="fa fa-hourglass-half me-1"/>
                         <span>Ce ticket attend son analyse automatique.</span>
+                    </div>
+                    <div class="alert alert-info py-1" role="alert"
+                         invisible="state != 'analyzing'">
+                        <i class="fa fa-spinner me-1"/>
+                        <span>Analyse automatique en cours (file d'attente
+                            IA). Cette page se met à jour une fois le
+                            traitement terminé.</span>
                     </div>
                     <div class="alert alert-danger py-1" role="alert"
                          invisible="not ai_error_message">
@@ -238,6 +245,11 @@
                                            widget="percentage"/>
                                 </group>
                             </group>
+                            <label for="ai_vision_text"
+                                   invisible="not ai_vision_text"/>
+                            <field name="ai_vision_text" readonly="1"
+                                   invisible="not ai_vision_text"/>
+                            <label for="ai_raw_json" invisible="not ai_raw_json"/>
                             <field name="ai_raw_json" readonly="1" nolabel="1"
                                    invisible="not ai_raw_json"/>
                         </page>

@@ -122,6 +122,17 @@ class JsAiProvider(models.Model):
     supports_json_schema = fields.Boolean(
         string="Sortie structurée", default=True,
         help="Le moteur sait contraindre sa réponse à un schéma JSON.")
+    json_from_vision = fields.Boolean(
+        string="JSON directement par le modèle vision", default=False,
+        help="Si activé, le modèle vision produit directement le JSON "
+             "structuré du ticket (schéma imposé) et l'étape de "
+             "structuration séparée par le modèle texte est sautée. À "
+             "réserver aux moteurs dont le modèle vision suit fiablement "
+             "un schéma strict même en présence d'une image — c'est "
+             "souvent le cas des moteurs cloud, rarement celui des "
+             "modèles vision locaux (qwen3-vl, llava...), qui lisent bien "
+             "l'image mais structurent mal le JSON dans le même appel. "
+             "Décoché par défaut.")
 
     log_ids = fields.One2many('js.ai.log', 'provider_id', string="Journal")
     log_count = fields.Integer(compute='_compute_log_count')
@@ -454,7 +465,8 @@ class JsAiProvider(models.Model):
         structure de son choix.
         """
         self.ensure_one()
-        model = self.model_vision or self.model_text
+        model = (self.model_vision if images else
+                 (self.model_text or self.model_vision))
 
         content = []
         for image in images:

@@ -12,6 +12,7 @@
                 <field name="base_url"/>
                 <field name="model_vision"/>
                 <field name="model_text" optional="show"/>
+                <field name="json_from_vision" optional="hide" widget="boolean_toggle"/>
                 <field name="is_default" widget="boolean_toggle"/>
                 <field name="active" widget="boolean_toggle"/>
             </list>
@@ -56,6 +57,7 @@
                             <field name="model_text"
                                    placeholder="Identique au modèle vision"/>
                             <field name="supports_json_schema"/>
+                            <field name="json_from_vision"/>
                         </group>
                     </group>
 

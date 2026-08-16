@@ -10,6 +10,15 @@ plusieurs filtres déterministes :
 
 Toute valeur qui ne satisfait pas le contrôle arithmétique est signalée à
 l'utilisateur plutôt que d'être écrite en silence.
+
+L'extraction proprement dite se déroule en deux étapes appelées séparément
+par des jobs ``queue_job`` distincts (``run_vision_phase`` puis
+``run_text_phase``, voir docs/05_IA.md) : une lecture libre par le modèle
+vision, puis une structuration en JSON par le modèle texte. Un moteur dont
+``json_from_vision`` est activé saute la seconde étape et produit le JSON
+dès la première. ``analyze()`` reste disponible comme enchaînement
+synchrone des deux étapes, pour la console ou les tests, mais aucun flux
+applicatif ne l'appelle plus directement.
 """
 
 import json
@@ -110,6 +119,30 @@ aucune autre : "partner_name", "summary", "date", "reference", "currency", \
 d'objets avec "rate", "base", "amount"). Ne traduis jamais ces noms de clés \
 en français."""
 
+# Prompt système de l'étape vision (lecture libre, sans schéma). Utilisé
+# uniquement lorsque le moteur ne produit pas directement le JSON
+# (`json_from_vision` désactivé) : la structuration en JSON est alors une
+# étape texte séparée, qui réutilise SYSTEM_PROMPT/TICKET_SCHEMA à partir
+# de cette transcription plutôt que de l'image.
+VISION_SYSTEM_PROMPT = """Tu es un assistant spécialisé dans la lecture de \
+tickets de caisse et de justificatifs de dépense suisses.
+
+Règles impératives :
+- Tu ne transcris que ce qui est réellement imprimé. Tu n'inventes aucun \
+montant et tu ne complètes aucune valeur absente.
+- Les montants sont recopiés tels quels, avec deux décimales, sans symbole \
+monétaire. Exemple : "12.90".
+- En Suisse, les montants affichés sur un ticket sont presque toujours TTC.
+- Le séparateur de milliers peut être une apostrophe : 1'234.50 vaut 1234.50.
+- Décris l'enseigne, la date, la référence, puis chaque article avec sa \
+quantité, son prix unitaire et son montant lorsqu'ils sont imprimés. Les \
+remises et consignes sont des lignes à part entière.
+- Détaille la TVA telle qu'imprimée, taux par taux, avec la base et le \
+montant si le ticket les indique, puis le total général.
+- Si une information est illisible, dis-le plutôt que de l'inventer.
+- Réponds par un texte libre et complet, pas par du JSON : la mise en \
+forme structurée est faite dans une étape séparée."""
+
 # Prompt système de l'étape distincte d'affectation des comptes. Ne jamais
 # réutiliser SYSTEM_PROMPT ni TICKET_SCHEMA ici : ce sont ceux de la lecture
 # du ticket, sans rapport avec la forme de réponse attendue pour cette
@@ -136,10 +169,25 @@ class JsTicketExtractor(models.AbstractModel):
     # ------------------------------------------------------------------
     @api.model
     def analyze(self, ticket, provider=None):
-        """Analyse les pièces d'un ticket et le renseigne.
+        """Enchaîne synchroniquement les deux étapes d'extraction.
 
-        :return: dictionnaire de compte rendu
+        Pratique en console ou en test, mais aucun flux applicatif ne
+        l'appelle plus directement : ceux-ci passent par la file
+        ``queue_job``, phase par phase (``run_vision_phase`` puis, sauf
+        moteur ``json_from_vision``, ``run_text_phase``), pour ne jamais
+        bloquer un worker web ou un cron sur un appel IA long. Voir
+        docs/05_IA.md.
+
+        :return: le ticket, renseigné.
         """
+        provider = self._resolve_provider(ticket, provider)
+        self.run_vision_phase(ticket, provider=provider)
+        if not provider.json_from_vision:
+            self.run_text_phase(ticket, provider=provider)
+        return ticket
+
+    @api.model
+    def _resolve_provider(self, ticket, provider=None):
         provider = (provider or ticket.ai_provider_id
                     or ticket.company_id.js_depense_ai_provider_id
                     or self.env['js.ai.provider']._get_default())
@@ -147,24 +195,7 @@ class JsTicketExtractor(models.AbstractModel):
             raise UserError(_(
                 "Aucun moteur d'analyse n'est configuré. Créez-en un dans "
                 "Dépenses IA > Configuration > Moteurs IA."))
-
-        documents = self._collect_documents(ticket)
-        if not documents:
-            raise UserError(_(
-                "Joignez au moins une photo ou un scan du ticket avant de "
-                "lancer l'analyse."))
-
-        use_ocr = ticket.company_id.js_depense_use_ocr
-        images, ocr_text = ocr.prepare_documents(documents, use_ocr=use_ocr)
-        if not images:
-            raise UserError(_(
-                "Les pièces jointes n'ont pas pu être converties en images."))
-
-        payload = self._extract_with_retries(
-            ticket, provider, images, ocr_text)
-
-        self._apply_to_ticket(ticket, payload, provider)
-        return payload
+        return provider
 
     @api.model
     def _collect_documents(self, ticket):
@@ -177,19 +208,136 @@ class JsTicketExtractor(models.AbstractModel):
                     "Pièce jointe illisible : %s", attachment.display_name)
         return documents
 
+    @api.model
+    def _prepare_documents(self, ticket):
+        """Pièces jointes du ticket, converties en images exploitables."""
+        documents = self._collect_documents(ticket)
+        if not documents:
+            raise UserError(_(
+                "Joignez au moins une photo ou un scan du ticket avant de "
+                "lancer l'analyse."))
+        use_ocr = ticket.company_id.js_depense_use_ocr
+        images, ocr_text = ocr.prepare_documents(documents, use_ocr=use_ocr)
+        if not images:
+            raise UserError(_(
+                "Les pièces jointes n'ont pas pu être converties en images."))
+        return images, ocr_text
+
+    # ------------------------------------------------------------------
+    # Étape 1 : vision
+    # ------------------------------------------------------------------
+    @api.model
+    def run_vision_phase(self, ticket, provider=None):
+        """Fait lire le ticket par le modèle vision.
+
+        Deux issues possibles, selon ``provider.json_from_vision`` :
+
+        * moteur capable de structurer le JSON dès la lecture de l'image
+          (généralement les moteurs cloud) : cette étape produit et
+          applique directement le résultat final, comme le faisait
+          l'ancien appel combiné ;
+        * sinon (cas courant des modèles vision locaux, qui lisent bien
+          l'image mais structurent mal le JSON dans le même appel) :
+          cette étape se limite à une transcription libre, stockée sur
+          ``ticket.ai_vision_text`` en vue de ``run_text_phase``.
+
+        :return: le moteur utilisé (pour que l'appelant sache si une
+            étape texte séparée reste à enfiler).
+        """
+        provider = self._resolve_provider(ticket, provider)
+        images, ocr_text = self._prepare_documents(ticket)
+
+        if provider.json_from_vision:
+            payload = self._extract_json_with_retries(
+                ticket, provider, images,
+                lambda remark=None: self._build_extraction_prompt(
+                    ocr_text, remark=remark))
+            self._apply_to_ticket(ticket, payload, provider)
+            return provider
+
+        content, duration, error = self._ask(
+            provider, ticket, self._build_vision_prompt(ocr_text), images,
+            step='vision', iteration=1, system=VISION_SYSTEM_PROMPT,
+            json_schema=None)
+        if error:
+            raise UserError(error)
+        if not content or not content.strip():
+            raise UserError(_(
+                "Le modèle vision n'a produit aucune lecture exploitable "
+                "du ticket."))
+
+        ticket.write({
+            'ai_vision_text': content,
+            'ai_provider_id': provider.id,
+        })
+        return provider
+
+    @api.model
+    def _build_vision_prompt(self, ocr_text=None):
+        blocks = [
+            "Lis ce ticket de dépense et transcris-en fidèlement le "
+            "contenu en texte libre (voir les consignes système) : "
+            "enseigne, date, référence, articles, TVA détaillée et total."
+        ]
+        if ocr_text:
+            blocks.append(
+                "Transcription automatique (OCR) disponible en complément, "
+                "utile si l'image est peu lisible :\n-----\n%s\n-----"
+                % ocr_text[:6000])
+        return "\n\n".join(blocks)
+
+    # ------------------------------------------------------------------
+    # Étape 2 : structuration en JSON
+    # ------------------------------------------------------------------
+    @api.model
+    def run_text_phase(self, ticket, provider=None):
+        """Structure en JSON la lecture produite par ``run_vision_phase``."""
+        provider = self._resolve_provider(ticket, provider)
+        vision_text = ticket.ai_vision_text
+        if not vision_text:
+            raise UserError(_(
+                "Aucune lecture du modèle vision n'est disponible pour ce "
+                "ticket : l'étape de structuration ne peut pas s'exécuter."))
+
+        payload = self._extract_json_with_retries(
+            ticket, provider, images=[],
+            prompt_builder=lambda remark=None: self._build_text_structuring_prompt(
+                vision_text, remark=remark))
+        self._apply_to_ticket(ticket, payload, provider)
+        return provider
+
+    @api.model
+    def _build_text_structuring_prompt(self, vision_text, remark=None):
+        blocks = [
+            "Voici la lecture d'un ticket de dépense produite par un "
+            "modèle de vision à partir de sa photo. Structure ces "
+            "informations au format JSON demandé, sans en changer le "
+            "contenu.",
+            "Lecture du ticket :\n-----\n%s\n-----" % (vision_text or '')[:6000],
+        ]
+        if remark:
+            blocks.append("Correction attendue : %s" % remark)
+        return "\n\n".join(blocks)
+
     # ------------------------------------------------------------------
     # Dialogue avec le moteur
     # ------------------------------------------------------------------
     @api.model
-    def _extract_with_retries(self, ticket, provider, images, ocr_text):
+    def _extract_json_with_retries(self, ticket, provider, images,
+                                    prompt_builder):
         """Interroge le moteur, puis le relance tant que le compte n'y est pas.
 
-        La relance n'est pas une simple répétition : elle indique
-        précisément l'écart constaté, ce qui conduit le modèle à relire la
-        zone fautive plutôt qu'à reproduire son erreur.
+        ``prompt_builder`` est un rappel ``remark=None -> str`` : la
+        première interrogation ne porte aucune remarque, les suivantes
+        portent soit un signalement de JSON invalide, soit le détail de
+        l'écart arithmétique constaté — ce qui conduit le modèle à relire
+        la zone fautive plutôt qu'à reproduire son erreur. Cette
+        indirection permet de réutiliser la même boucle de relance pour
+        l'appel combiné image+schéma (moteur ``json_from_vision``) et pour
+        l'appel texte seul de l'étape de structuration.
         """
         max_iterations = max(1, (ticket.company_id.js_depense_ai_max_iterations or 0) + 1)
-        prompt = self._build_extraction_prompt(ocr_text)
+        prompt = prompt_builder()
         payload, last_report = None, None
 
         for iteration in range(1, max_iterations + 1):
@@ -206,8 +354,7 @@ class JsTicketExtractor(models.AbstractModel):
 
             candidate = self._parse_json(content)
             if candidate is None:
-                prompt = self._build_extraction_prompt(
-                    ocr_text,
+                prompt = prompt_builder(
                     remark=_("Ta réponse précédente n'était pas un JSON "
                              "valide. Renvoie uniquement l'objet JSON."))
                 continue
@@ -222,8 +369,7 @@ class JsTicketExtractor(models.AbstractModel):
             if iteration >= max_iterations:
                 break
 
-            prompt = self._build_extraction_prompt(
-                ocr_text, remark=last_report['message'])
+            prompt = prompt_builder(remark=last_report['message'])
 
         if payload is None:
             raise UserError(_(
@@ -239,11 +385,19 @@ class JsTicketExtractor(models.AbstractModel):
         """Appelle le moteur en journalisant systématiquement l'échange.
 
         ``system`` et ``json_schema`` sont volontairement obligatoires et
-        sans valeur par défaut : cette méthode sert aussi bien l'extraction
-        du ticket que l'affectation des comptes, deux échanges dont le
-        schéma attendu n'a rien à voir. Un défaut implicite vers l'un des
-        deux finit tôt ou tard par être imposé à l'autre par erreur.
+        sans valeur par défaut : cette méthode sert aussi bien la lecture
+        vision, la structuration en JSON, et l'affectation des comptes —
+        trois échanges dont le schéma attendu n'a rien à voir. Un défaut
+        implicite vers l'un des trois finit tôt ou tard par être imposé
+        aux autres par erreur.
+
+        Le modèle effectivement sollicité (vision si des images sont
+        jointes, texte sinon) est déduit ici pour la seule journalisation,
+        en miroir de la logique de sélection propre à chaque moteur dans
+        ``js.ai.provider`` — ``provider.ask()`` ne renvoie pas ce choix.
         """
+        model_name = provider.model_vision if images else (
+            provider.model_text or provider.model_vision)
         try:
             content, duration = provider.ask(
                 prompt=prompt,
@@ -255,14 +409,15 @@ class JsTicketExtractor(models.AbstractModel):
                 ticket=ticket, provider=provider, step=step,
                 iteration=iteration, prompt=prompt, system=system,
                 response=content, duration=duration, success=True,
-                image_count=len(images))
+                image_count=len(images), model_name=model_name)
             return content, duration, None
         except Exception as error:
             self.env['js.ai.log']._record(
                 ticket=ticket, provider=provider, step=step,
                 iteration=iteration, prompt=prompt, system=system,
                 response='', duration=0.0, success=False,
-                error=str(error), image_count=len(images))
+                error=str(error), image_count=len(images),
+                model_name=model_name)
             return '', 0.0, str(error)
 
     @api.model
@@ -441,6 +596,8 @@ class JsTicketExtractor(models.AbstractModel):
         parsed_date = self._parse_date(payload.get('date'))
         if parsed_date:
             values['ticket_date'] = parsed_date
+            if not ticket.accounting_date:
+                values['accounting_date'] = parsed_date
 
         if payload.get('reference'):
             values['reference'] = payload['reference'][:64]
@@ -462,7 +619,7 @@ class JsTicketExtractor(models.AbstractModel):
         ticket._rebuild_tax_lines()
         self._fill_declared_vat(ticket, payload)
 
-        if ticket.state == 'draft':
+        if ticket.state in ('draft', 'analyzing'):
             ticket.state = 'to_validate'
 
         if not report.get('consistent'):

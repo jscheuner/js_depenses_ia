@@ -22,6 +22,9 @@
                     <field name="analyze_now"/>
                     <field name="company_id"
                            groups="base.group_multi_company"/>
+                    <field name="ai_provider_count" invisible="1"/>
+                    <field name="ai_provider_id"
+                           invisible="ai_provider_count &lt;= 1"/>
                 </group>
 
                 <div class="alert alert-warning py-1" role="alert"

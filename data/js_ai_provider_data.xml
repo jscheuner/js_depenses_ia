@@ -18,6 +18,7 @@
             <field name="timeout">300</field>
             <field name="max_retries">2</field>
             <field name="supports_json_schema" eval="True"/>
+            <field name="json_from_vision" eval="False"/>
             <field name="is_default" eval="True"/>
             <field name="sequence">10</field>
         </record>
@@ -43,6 +44,7 @@
             <field name="model_text">gpt-4o-mini</field>
             <field name="temperature">0.0</field>
             <field name="timeout">180</field>
+            <field name="json_from_vision" eval="True"/>
             <field name="sequence">30</field>
             <field name="active" eval="False"/>
         </record>
@@ -57,6 +59,7 @@
             <field name="temperature">0.0</field>
             <field name="timeout">180</field>
             <field name="supports_json_schema" eval="True"/>
+            <field name="json_from_vision" eval="True"/>
             <field name="sequence">40</field>
             <field name="active" eval="False"/>
         </record>
@@ -70,6 +73,7 @@
             <field name="model_text">mistral-large-latest</field>
             <field name="temperature">0.0</field>
             <field name="timeout">180</field>
+            <field name="json_from_vision" eval="True"/>
             <field name="sequence">50</field>
             <field name="active" eval="False"/>
         </record>

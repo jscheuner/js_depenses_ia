@@ -1,11 +1,7 @@
 # -*- coding: utf-8 -*-
 
-import logging
-
 from odoo import fields, models, _
 from odoo.exceptions import UserError
-
-_logger = logging.getLogger(__name__)
 
 
 class JsDepenseTicketUpload(models.TransientModel):
@@ -40,9 +36,16 @@ class JsDepenseTicketUpload(models.TransientModel):
              "date sur le ticket.")
     analyze_now = fields.Boolean(
         string="Analyser immédiatement", default=True,
-        help="Décochez pour laisser l'analyse se faire en arrière-plan. "
-             "Recommandé au-delà de quelques photos, l'analyse pouvant "
-             "prendre une trentaine de secondes par ticket.")
+        help="L'analyse est de toute façon toujours asynchrone (file "
+             "d'attente queue_job) : cette case ne détermine que le moment "
+             "où elle est mise en file. Décochez pour la reporter au "
+             "prochain passage du cron plutôt que de l'enfiler tout de "
+             "suite.")
+    ai_provider_id = fields.Many2one(
+        'js.ai.provider', string="Moteur IA",
+        help="Laisser vide pour utiliser le moteur par défaut.")
+    ai_provider_count = fields.Integer(
+        default=lambda self: self.env['js.ai.provider'].search_count([]))
 
     def action_create_tickets(self):
         self.ensure_one()
@@ -67,6 +70,7 @@ class JsDepenseTicketUpload(models.TransientModel):
             'ticket_date': self.ticket_date or fields.Date.context_today(self),
             'origin': 'upload',
             'needs_ai_analysis': not self.analyze_now,
+            'ai_provider_id': self.ai_provider_id.id or False,
         })
         # La pièce est recopiée sur le ticket : l'assistant étant transitoire,
         # ses propres pièces jointes seraient supprimées avec lui.
@@ -78,30 +82,14 @@ class JsDepenseTicketUpload(models.TransientModel):
         return ticket
 
     def _analyze(self, tickets):
-        """Analyse immédiate, ticket par ticket.
+        """Met les tickets en file pour l'analyse IA asynchrone, par lots.
 
-        Un échec sur une photo ne doit pas compromettre les autres : chaque
-        ticket est traité indépendamment et l'erreur est consignée sur le
-        ticket concerné.
+        Le découpage en lots et la gestion des échecs (relance ou abandon
+        ticket par ticket, sans compromettre les autres) sont entièrement
+        pris en charge par ``_start_ai_analysis`` et les jobs qu'elle
+        enfile. Voir docs/05_IA.md.
         """
-        extractor = self.env['js.ticket.extractor']
-        for ticket in tickets:
-            try:
-                extractor.analyze(ticket)
-                ticket.ai_error_message = False
-            except Exception as error:
-                message = str(error)[:255]
-                _logger.warning(
-                    "Analyse impossible pour le ticket %s : %s",
-                    ticket.name, message)
-                ticket.write({
-                    'ai_error_message': message,
-                    'ai_attempt_count': ticket.ai_attempt_count + 1,
-                })
-                ticket.message_post(body=_(
-                    "<p><b>L'analyse automatique a échoué.</b></p>"
-                    "<p>%s</p>", message))
-        return True
+        return tickets._start_ai_analysis()
 
     def _open_result(self, tickets):
         self.ensure_one()

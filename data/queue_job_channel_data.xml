@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <!--
+            Un seul canal parent, de capacité 1 : les jobs des deux
+            sous-canaux en dépendent, ce qui garantit qu'un seul appel au
+            moteur IA (vision ou texte) s'exécute à la fois, quel que soit
+            le nombre de workers Odoo. Avec un unique GPU/instance Ollama,
+            exécuter un job vision et un job texte « en parallèle » du
+            point de vue de queue_job reviendrait, côté GPU, à charger et
+            décharger un modèle en boucle. Voir docs/05_IA.md.
+        -->
+        <record id="channel_js_depenses" model="queue.job.channel">
+            <field name="name">js_depenses</field>
+            <field name="parent_id" ref="queue_job.channel_root"/>
+            <field name="capacity">1</field>
+        </record>
+        <record id="channel_js_depenses_vision" model="queue.job.channel">
+            <field name="name">vision</field>
+            <field name="parent_id" ref="channel_js_depenses"/>
+        </record>
+        <record id="channel_js_depenses_text" model="queue.job.channel">
+            <field name="name">text</field>
+            <field name="parent_id" ref="channel_js_depenses"/>
+        </record>
+
+    </data>
+</odoo>

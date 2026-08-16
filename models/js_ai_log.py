@@ -26,7 +26,8 @@ class JsAiLog(models.Model):
         default=lambda self: self.env.company, index=True)
 
     step = fields.Selection(
-        [('extract', "Extraction du ticket"),
+        [('vision', "Lecture du ticket (vision)"),
+         ('extract', "Extraction du ticket"),
          ('accounts', "Affectation des comptes"),
          ('fix', "Correction d'écart"),
          ('other', "Autre")],
@@ -46,8 +47,14 @@ class JsAiLog(models.Model):
     @api.model
     def _record(self, ticket=None, provider=None, step='extract', iteration=1,
                 prompt='', system='', response='', duration=0.0,
-                success=True, error='', image_count=0):
-        """Crée une entrée de journal sans jamais interrompre le traitement."""
+                success=True, error='', image_count=0, model_name=None):
+        """Crée une entrée de journal sans jamais interrompre le traitement.
+
+        ``model_name`` est déterminé par l'appelant lorsqu'il est connu
+        (l'étape peut mobiliser le modèle vision ou le modèle texte selon
+        qu'une image est transmise) ; à défaut, le modèle vision du
+        moteur sert de repli.
+        """
         try:
             return self.sudo().create({
                 'ticket_id': ticket.id if ticket else False,
@@ -56,7 +63,8 @@ class JsAiLog(models.Model):
                                else self.env.company.id),
                 'step': step,
                 'iteration': iteration,
-                'model_name': (provider.model_vision if provider else ''),
+                'model_name': model_name or (
+                    provider.model_vision if provider else ''),
                 'system_prompt': system or '',
                 'prompt': (prompt or '')[:60000],
                 'response': (response or '')[:60000],

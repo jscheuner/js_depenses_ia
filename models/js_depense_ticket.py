@@ -2,7 +2,6 @@
 
 import json
 import logging
-from collections import defaultdict
 
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
@@ -982,16 +981,21 @@ class JsDepenseTicket(models.Model):
             },
         }
 
-    def _start_ai_analysis(self, batch_size=None):
-        """Enfile les tickets pour l'analyse IA, par lots.
+    def _start_ai_analysis(self):
+        """Enfile chaque ticket pour l'analyse IA, dans un job qui lui est
+        propre.
 
-        Toujours asynchrone (voir docs/05_IA.md). Les tickets sont
-        regroupés par société puis répartis en lots de ``batch_size``
-        (taille configurée par société par défaut) afin qu'un lot entier
-        passe par la phase vision avant la phase texte, plutôt que
-        ticket par ticket : avec un seul GPU local, alterner les deux
-        modèles à chaque ticket reviendrait à les charger et décharger en
-        boucle.
+        Toujours asynchrone (voir docs/05_IA.md). Un job par ticket plutôt
+        qu'un job de lot isole les dégâts d'un moteur IA hors ligne ou trop
+        lent au seul ticket concerné : dans un job de lot, un dépassement
+        de ``limit_time_real`` au milieu du lot aurait pu faire perdre la
+        progression de tickets déjà traités avec succès, en plus de
+        surcharger inutilement le moteur local (plusieurs appels tentés
+        coup sur coup sans laisser le worker respirer). L'ordre naturel
+        d'enfilement — tous les jobs vision d'une même vague créés avant
+        qu'aucun de leurs jobs texte ne le soit — préserve malgré tout
+        l'avantage d'un seul basculement de modèle sur le GPU (voir
+        docs/05_IA.md).
         """
         tickets = self.filtered(lambda t: t.state not in ('posted', 'cancel'))
         if not tickets:
@@ -1002,54 +1006,40 @@ class JsDepenseTicket(models.Model):
             'ai_error_message': False,
         })
 
-        by_company = defaultdict(lambda: self.env['js.depense.ticket'])
         for ticket in tickets:
-            by_company[ticket.company_id] |= ticket
-
-        for company, company_tickets in by_company.items():
-            size = batch_size or company.js_depense_ai_batch_size or 10
-            for offset in range(0, len(company_tickets), size):
-                batch = company_tickets[offset:offset + size]
-                batch.with_delay(
-                    description=_(
-                        "Analyse IA (vision) — lot de %s ticket(s)",
-                        len(batch)),
-                )._job_batch_vision()
+            ticket.with_delay(
+                description=_("Analyse IA (vision) — %s", ticket.name),
+            )._job_ticket_vision()
         return True
 
-    def _job_batch_vision(self):
-        """Job ``queue_job`` : phase vision pour un lot de tickets.
+    def _job_ticket_vision(self):
+        """Job ``queue_job`` : phase vision d'un ticket.
 
-        Les tickets dont le moteur ne produit pas directement le JSON
-        (``json_from_vision``) sont regroupés dans ``to_structure`` et
-        enchaînés dans un unique job texte, pour la même raison que le
-        lot vision lui-même : un seul basculement de modèle par lot.
+        Enchaîne sur son propre job texte (canal séparé) plutôt que de
+        traiter la structuration dans la foulée : un moteur hors ligne ou
+        en erreur ne doit bloquer que ce ticket, jamais retenir le worker
+        au-delà du nécessaire.
         """
+        self.ensure_one()
         extractor = self.env['js.ticket.extractor']
-        to_structure = self.env['js.depense.ticket']
-        for ticket in self:
-            try:
-                provider = extractor.run_vision_phase(ticket)
-                if not provider.json_from_vision:
-                    to_structure |= ticket
-            except Exception as error:
-                ticket._register_ai_failure(error)
-        if to_structure:
-            to_structure.with_delay(
-                description=_(
-                    "Analyse IA (texte) — lot de %s ticket(s)",
-                    len(to_structure)),
-            )._job_batch_text()
+        try:
+            provider = extractor.run_vision_phase(self)
+            if not provider.json_from_vision:
+                self.with_delay(
+                    description=_("Analyse IA (texte) — %s", self.name),
+                )._job_ticket_text()
+        except Exception as error:
+            self._register_ai_failure(error)
         return True
 
-    def _job_batch_text(self):
-        """Job ``queue_job`` : phase texte (structuration JSON) d'un lot."""
+    def _job_ticket_text(self):
+        """Job ``queue_job`` : phase texte (structuration JSON) d'un ticket."""
+        self.ensure_one()
         extractor = self.env['js.ticket.extractor']
-        for ticket in self:
-            try:
-                extractor.run_text_phase(ticket)
-            except Exception as error:
-                ticket._register_ai_failure(error)
+        try:
+            extractor.run_text_phase(self)
+        except Exception as error:
+            self._register_ai_failure(error)
         return True
 
     def _register_ai_failure(self, error):
@@ -1168,8 +1158,8 @@ class JsDepenseTicket(models.Model):
         """Enfile les tickets reçus, en dehors du flux de messagerie.
 
         Ne fait qu'enfiler les jobs d'analyse (voir ``_start_ai_analysis``) :
-        le traitement proprement dit a lieu dans ``_job_batch_vision`` puis
-        ``_job_batch_text``, exécutés par le(s) worker(s) ``queue_job`` en
+        le traitement proprement dit a lieu dans ``_job_ticket_vision`` puis
+        ``_job_ticket_text``, exécutés par le(s) worker(s) ``queue_job`` en
         respectant le canal exclusif du GPU. Voir docs/05_IA.md.
         """
         pending = self.search([

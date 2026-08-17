@@ -92,8 +92,9 @@ Décrits en détail dans `04_APPRENTISSAGE.md` :
 `js.ai.provider` (moteur configurable), `js.ai.log` (trace des échanges),
 et l'`AbstractModel` `js.ticket.extractor` qui orchestre la chaîne.
 L'analyse s'exécute en tâche de fond via `queue_job` (OCA, dépendance du
-module) : `js.depense.ticket._job_batch_vision()` et `_job_batch_text()`
-sont les deux méthodes enfilées par lot. Détail complet dans `05_IA.md`.
+module) : `js.depense.ticket._job_ticket_vision()` et `_job_ticket_text()`
+sont les deux méthodes enfilées, une fois par ticket. Détail complet dans
+`05_IA.md`.
 
 ---
 

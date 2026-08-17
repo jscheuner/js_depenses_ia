@@ -45,17 +45,12 @@
 
                     <setting id="js_depense_ai"
                              string="Analyse automatique"
-                             help="Moteur d'analyse, taille des lots traités par le worker et nombre de relances lorsque les montants extraits ne concordent pas.">
+                             help="Moteur d'analyse et nombre de relances lorsque les montants extraits ne concordent pas.">
                         <div class="content-group mt-2">
                             <div class="row">
                                 <label for="js_depense_ai_provider_id"
                                        class="col-lg-4 o_light_label"/>
                                 <field name="js_depense_ai_provider_id"/>
-                            </div>
-                            <div class="row">
-                                <label for="js_depense_ai_batch_size"
-                                       class="col-lg-4 o_light_label"/>
-                                <field name="js_depense_ai_batch_size"/>
                             </div>
                             <div class="row">
                                 <label for="js_depense_ai_max_iterations"

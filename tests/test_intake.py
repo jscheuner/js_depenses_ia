@@ -77,7 +77,7 @@ class TestIntake(JsDepensesCommon):
         """Le cron enfile un job ; l'exécuter le mène à « À vérifier ».
 
         L'analyse étant asynchrone (voir docs/05_IA.md), le cron ne fait
-        qu'enfiler ``_job_batch_vision`` via ``with_delay()`` : dans une
+        qu'enfiler ``_job_ticket_vision`` via ``with_delay()`` : dans une
         transaction de test, sans JobRunner réel, ce job n'est pas exécuté
         tout seul. Le test l'invoque donc directement, comme le ferait un
         worker ``queue_job``.
@@ -101,7 +101,7 @@ class TestIntake(JsDepensesCommon):
             self.assertEqual(ticket.state, 'analyzing')
             self.assertFalse(ticket.needs_ai_analysis)
 
-            ticket._job_batch_vision()
+            ticket._job_ticket_vision()
 
         ticket.invalidate_recordset()
         self.assertFalse(ticket.needs_ai_analysis)
@@ -133,7 +133,7 @@ class TestIntake(JsDepensesCommon):
                 self.env['js.depense.ticket']._cron_analyze_pending_tickets()
                 ticket.invalidate_recordset()
                 if ticket.state == 'analyzing':
-                    ticket._job_batch_vision()
+                    ticket._job_ticket_vision()
                     ticket.invalidate_recordset()
 
         self.assertFalse(ticket.needs_ai_analysis)
@@ -198,10 +198,10 @@ class TestIntake(JsDepensesCommon):
     def test_upload_failure_does_not_block_other_tickets(self):
         """L'échec d'un ticket n'empêche pas le traitement des autres.
 
-        Le dépôt enfile toujours un job (voir docs/05_IA.md) plutôt que
-        d'appeler le moteur en direct : le test exécute ce job
+        Le dépôt enfile toujours un job par ticket (voir docs/05_IA.md)
+        plutôt que d'appeler le moteur en direct : le test exécute ces jobs
         manuellement, comme le ferait un worker ``queue_job``, pour
-        vérifier que l'échec de chaque ticket reste isolé au sein du lot.
+        vérifier que l'échec de l'un n'affecte pas les autres.
         """
         attachments = self.env['ir.attachment'].create([
             {'name': "ticket1.png", 'mimetype': 'image/png',
@@ -225,7 +225,8 @@ class TestIntake(JsDepensesCommon):
             self.assertEqual(len(tickets), 2)
             for ticket in tickets:
                 self.assertEqual(ticket.state, 'analyzing')
-            tickets._job_batch_vision()
+            for ticket in tickets:
+                ticket._job_ticket_vision()
 
         tickets.invalidate_recordset()
         for ticket in tickets:

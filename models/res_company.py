@@ -37,9 +37,3 @@ class ResCompany(models.Model):
              "déterministe plutôt que devinés.")
     js_depense_auto_apply_rules = fields.Boolean(
         string="Appliquer les règles apprises", default=True)
-    js_depense_ai_batch_size = fields.Integer(
-        string="Taille des lots d'analyse", default=10,
-        help="Nombre de tickets traités ensemble dans une même phase "
-             "(vision puis texte) avant de passer au lot suivant. Un lot "
-             "plus grand réduit le nombre de basculements de modèle sur le "
-             "GPU mais retarde la validation des premiers tickets du lot.")

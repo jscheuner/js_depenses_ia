@@ -25,8 +25,6 @@ class ResConfigSettings(models.TransientModel):
         related='company_id.js_depense_use_ocr', readonly=False)
     js_depense_auto_apply_rules = fields.Boolean(
         related='company_id.js_depense_auto_apply_rules', readonly=False)
-    js_depense_ai_batch_size = fields.Integer(
-        related='company_id.js_depense_ai_batch_size', readonly=False)
 
     # ------------------------------------------------------------------
     # Adresse de réception des tickets

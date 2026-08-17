@@ -308,6 +308,11 @@ class JsAiProvider(models.Model):
             headers['Authorization'] = 'Bearer %s' % key
         return headers
 
+    # Délai (secondes) accordé à la vérification préalable de disponibilité.
+    # Volontairement très court : il ne s'agit pas d'attendre une réponse du
+    # modèle, seulement de constater que le service accepte la connexion.
+    _PING_TIMEOUT = 5
+
     def _check_available(self):
         self.ensure_one()
         if requests is None:
@@ -317,6 +322,36 @@ class JsAiProvider(models.Model):
         if not self.base_url:
             raise UserError(_(
                 "Le moteur « %s » n'a pas d'URL de service.", self.name))
+        self._check_online()
+
+    def _check_online(self):
+        """Vérifie que le service répond avant de lancer l'appel complet.
+
+        Un appel complet (``_post``) peut retenir un worker Odoo plusieurs
+        minutes (délai configuré multiplié par le nombre de tentatives), ce
+        qui dépasse largement la limite de temps d'un worker
+        (``limit_time_real``, ~120 s par défaut) : Odoo tue alors le worker
+        en pleine requête, ce qui ressemble à un plantage plutôt qu'à une
+        erreur propre (voir docs/05_IA.md). Cette vérification préalable,
+        à délai volontairement court, permet d'échouer vite et proprement
+        lorsque le moteur est simplement hors ligne, avant d'engager le
+        moindre appel long.
+
+        Seule la joignabilité importe ici : n'importe quelle réponse HTTP,
+        même une erreur 404, prouve que le service écoute. Seule une
+        exception (connexion refusée, DNS introuvable, délai dépassé)
+        signale qu'il est hors ligne.
+        """
+        self.ensure_one()
+        try:
+            requests.get(self.base_url, timeout=self._PING_TIMEOUT)
+        except Exception as error:
+            raise UserError(_(
+                "Le moteur « %(name)s » ne répond pas (%(url)s).\n\n"
+                "%(error)s\n\n"
+                "Vérifiez qu'il est démarré et accessible depuis le "
+                "serveur Odoo avant de relancer l'analyse.",
+                name=self.name, url=self.base_url, error=error))
 
     def _post(self, url, payload):
         """Appel HTTP avec relances, retournant le corps décodé."""

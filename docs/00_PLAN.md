@@ -28,7 +28,7 @@ passer une erreur de centime**.
 | Contrôle | Total calculé = total imprimé, sinon comptabilisation refusée |
 | Apprentissage | Application automatique avec mention « appris de vos corrections » |
 | Moteurs IA | Ollama local **et** API cloud, configurables simultanément |
-| Analyse IA | Toujours asynchrone, via `queue_job` (OCA), par lots — jamais dans la requête web |
+| Analyse IA | Toujours asynchrone, via `queue_job` (OCA), un job par ticket — jamais dans la requête web |
 
 ---
 
@@ -54,8 +54,11 @@ passer une erreur de centime**.
 - [x] Réception des tickets par courriel (alias + analyse différée)
 - [x] Dépôt groupé de photos depuis Odoo
 - [x] Lien retour écriture comptable → ticket
-- [x] Analyse asynchrone par lots via `queue_job` (canal exclusif, lecture
-      vision puis structuration texte séparées, option `json_from_vision`)
+- [x] Analyse asynchrone via `queue_job`, un job par ticket (canal
+      exclusif, lecture vision puis structuration texte séparées, option
+      `json_from_vision`)
+- [x] Vérification de disponibilité du moteur IA avant tout appel long
+      (échec rapide et propre si hors ligne)
 - [x] 65 tests automatisés
 
 ### Reste à faire

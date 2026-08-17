@@ -62,7 +62,7 @@ L'analyse IA s'exécute **toujours** en tâche de fond, via le module OCA
 `queue_job` (dépôt [`OCA/queue`](https://github.com/OCA/queue)) : c'est
 ce qui évite qu'un modèle local lent ne fasse tuer le worker Odoo qui a
 servi la requête (`limit_time_real`, ~120 s par défaut). Détail de la
-conception (canaux, lots) dans `05_IA.md`.
+conception (canaux, un job par ticket) dans `05_IA.md`.
 
 Prérequis impératifs, sans quoi les jobs restent en attente indéfiniment :
 
@@ -262,7 +262,7 @@ démarre qu'après cette configuration explicite.
 2. Le ticket est créé aussitôt, à l'état *Brouillon*, marqué « Analyse en
    attente ». Le courriel n'attend pas l'analyse.
 3. La tâche planifiée **« Dépenses IA : analyser les tickets reçus »**
-   (toutes les 5 minutes) compose des lots et les enfile dans `queue_job`
+   (toutes les 5 minutes) enfile un job par ticket dans `queue_job`
    (canal `root.js_depenses.vision`, puis `.text`) : le ticket passe à
    l'état *Analyse IA* dès l'enfilement.
 4. Une fois le job de structuration passé, le ticket passe à
